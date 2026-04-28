@@ -1,0 +1,53 @@
+# MATLAB / Simulink generated artifacts
+slprj/
+*.slxc
+*.slx.r*
+*.mex*
+*.asv
+*.autosave
+*.m~
+
+# Code generation and simulation cache/output
+codegen/
+*_ert_rtw/
+*_grt_rtw/
+*_rtw/
+*.log
+
+# Large raw data kept outside Git history
+Tire_data/
+
+# Local scratch, extraction, and browser automation state
+tmp/
+.playwright-mcp/
+
+# Office temporary lock files
+~$*
+
+# Local Codex / OMX runtime state
+.omx/
+
+# Local Obsidian workspace state
+.obsidian/
+
+# Local agent instructions; keep machine-specific workflow rules out of public commits
+AGENTS.md
+
+# Local Claude Code runtime/config with personal API keys
+.claude/settings.local.json
+
+# Local smoke-test models generated while validating MCP setup
+tools/mcp_smoke/
+
+# Local CarSim run files; keep only the public template
+control_EVO/*.sim
+!control_EVO/*.template.sim
+
+# Local Simulink model backups; keep timestamped safety copies outside the repo
+control_EVO/*.before_*.slx
+
+# Third-party research papers and notes kept locally, not redistributed
+control_EVO/论文参考/
+
+# Agent-internal planning notes
+docs/superpowers/

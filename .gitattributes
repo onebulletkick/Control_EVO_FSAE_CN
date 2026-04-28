@@ -1,0 +1,13 @@
+*.m text
+*.md text
+*.txt text
+*.csv text
+*.sim text
+*.template.sim text
+*.ps1 text
+
+*.slx binary
+*.slxc binary
+*.mat binary
+*.zip binary
+*.png binary
