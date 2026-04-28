@@ -10,9 +10,11 @@
 
 - 控制目标：根据车辆状态和目标响应生成附加横摆力矩，使车辆横摆角速度和质心侧偏角更接近期望值。
 - 分配目标：把附加横摆力矩转化为四轮轮端扭矩，同时兼顾轮胎附着、电机扭矩、总驱动功率和扭矩变化率。
-- 工程目标：模型结构清晰，参数来源统一，能从 CarSim + Simulink 联合仿真继续向 DLI、嵌入式和实车集成推进。
+- 工程目标：模型结构清晰，参数来源统一，能从 CarSim + Simulink 联合仿真继续向 DIL、嵌入式和实车集成推进。
 
 总体算法链路如下：
+
+![EVO_Control_System 主控制链路](assets/quickstart/evo-control-system-main-flow.png)
 
 ```mermaid
 flowchart TD
@@ -58,6 +60,8 @@ EVO_Control_System.T -> CarSim S-Function.u1
 - `EVO_Control_System.T` 回到 `CarSim S-Function.u1`，形成四轮轮端扭矩输入闭环。
 
 控制系统内部已经按 Bus 化数据流整理：
+
+![EVO_Control_System 诊断与阅读顺序](assets/quickstart/evo-control-system-diagnostics.png)
 
 ```mermaid
 flowchart LR
@@ -870,7 +874,7 @@ T_to_CarSim_4w_N_m
 这里不新增以下结论：
 
 - 没有新增长工况 CarSim 仿真结论。
-- 没有新增 DLI 实时仿真结论。
+- 没有新增 DIL 实时仿真结论。
 - 没有新增实车验证结论。
 - 没有声明比赛级参数已经定版。
 
@@ -893,7 +897,7 @@ T_to_CarSim_4w_N_m
 5. 为嵌入式迁移保留接口意识
    当前 Simulink 模型使用 Bus 化结构，后续转 C 或接入主程序时，应保留“状态输入 - 目标生成 - 横摆力矩 - 扭矩请求 - 扭矩分配 - 执行器限幅”的边界。
 
-6. DLI 和实车阶段重新收敛传感器输入
+6. DIL 和实车阶段重新收敛传感器输入
    控制器输入不能只按 CarSim 能输出什么设计，必须回到实车真实可用信号，尤其是车速、横摆角速度、加速度、方向盘/前轮转角、轮速、油门和制动状态。
 
 ### 9.3 交接阅读顺序

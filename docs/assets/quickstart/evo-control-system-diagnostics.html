@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=2400, initial-scale=1" />
+  <title>EVO_Control_System 诊断与阅读顺序</title>
+  <style>
+    :root {
+      --navy: #08285c;
+      --blue: #0f5598;
+      --green: #174d3b;
+      --ink: #152033;
+      --warn: #f4a817;
+      --line: #cfe0f1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef3f8;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+    }
+    .page {
+      width: 2400px;
+      height: 1350px;
+      background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+      border: 3px solid #174f8e;
+      padding: 48px 58px;
+      overflow: hidden;
+    }
+    h1 {
+      margin: 0 0 26px;
+      color: var(--navy);
+      font-size: 64px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin-bottom: 38px;
+      font-size: 30px;
+      line-height: 1.25;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 560px;
+      gap: 34px;
+      align-items: start;
+    }
+    .panel {
+      min-height: 720px;
+      border: 2.6px dashed var(--blue);
+      border-radius: 18px;
+      background: rgba(255,255,255,.78);
+      padding: 38px 44px;
+    }
+    .panel h2 {
+      margin: 0 0 12px;
+      text-align: center;
+      color: var(--blue);
+      font-size: 42px;
+      line-height: 1.1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .subhead {
+      text-align: center;
+      color: #096cc2;
+      font-size: 25px;
+      font-weight: 900;
+      margin-bottom: 34px;
+    }
+    .desc {
+      text-align: center;
+      font-size: 27px;
+      line-height: 1.3;
+      font-weight: 700;
+      margin-bottom: 32px;
+    }
+    .bus-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      margin-bottom: 42px;
+    }
+    .bus {
+      height: 72px;
+      border: 1.8px solid #5b8e61;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #f9fff9, #ecf6ee);
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      font-size: 27px;
+      line-height: 1.15;
+      padding: 0 14px;
+      overflow-wrap: anywhere;
+    }
+    .tools {
+      border-top: 2px dashed #b4c7de;
+      padding-top: 34px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 22px;
+    }
+    .tool {
+      min-height: 170px;
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #1b2434;
+      font-size: 27px;
+      font-weight: 900;
+    }
+    .reading {
+      border: 2.5px solid var(--blue);
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+      box-shadow: 0 14px 28px rgba(10, 53, 98, .12);
+    }
+    .reading-head {
+      height: 76px;
+      background: linear-gradient(180deg, #0e4f90, #0a3f78);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 34px;
+      font-weight: 900;
+    }
+    .read-card {
+      position: relative;
+      margin: 16px;
+      padding: 16px 18px 16px 76px;
+      min-height: 132px;
+      border-radius: 11px;
+      background: linear-gradient(180deg, #f1f6fb, #e8f0f8);
+      color: #192337;
+    }
+    .read-card .num {
+      position: absolute;
+      top: 20px;
+      left: 18px;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #6aa4d7, #2567a6);
+      color: #fff;
+      font-size: 25px;
+      font-weight: 900;
+    }
+    .read-card strong {
+      display: block;
+      font-size: 26px;
+      line-height: 1.17;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .read-card span {
+      display: block;
+      margin-top: 9px;
+      font-size: 20px;
+      line-height: 1.35;
+      color: #4b5565;
+      font-weight: 700;
+    }
+    .warning {
+      margin-top: 32px;
+      border: 2.5px solid var(--warn);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fffdf7, #fffaf0);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      overflow: hidden;
+    }
+    .warn-item {
+      min-height: 210px;
+      padding: 32px 40px;
+      border-right: 2px solid #c8ced9;
+    }
+    .warn-item:last-child { border-right: 0; }
+    .warn-title {
+      color: #111827;
+      font-size: 30px;
+      line-height: 1.16;
+      font-weight: 900;
+      margin-bottom: 14px;
+    }
+    .warn-copy {
+      color: #273041;
+      font-size: 23px;
+      line-height: 1.36;
+      font-weight: 700;
+    }
+    .mono {
+      font-family: Consolas, "Microsoft YaHei", monospace;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1>EVO_Control_System 快速上手：诊断与阅读顺序</h1>
+    <div class="subtitle">DiagnosticsLogging 只接收旁路 Bus，用于观察、调试和结果记录；不反向参与控制。</div>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>DiagnosticsLogging（诊断记录）</h2>
+        <div class="subhead">只旁路观察，不反向参与控制</div>
+        <div class="desc">接收以下 Bus，用于信号监控、曲线查看、数据表格和结果导出。</div>
+
+        <div class="bus-grid">
+          <div class="bus">VehicleStateBus</div>
+          <div class="bus">TargetBus</div>
+          <div class="bus">YawMomentBus</div>
+          <div class="bus">TorqueRequestBus</div>
+          <div class="bus">AllocationBus</div>
+          <div class="bus">ActuatorBus</div>
+        </div>
+
+        <div class="tools">
+          <div class="tool">信号监控</div>
+          <div class="tool">时域曲线</div>
+          <div class="tool">二维/三维图</div>
+          <div class="tool">数据表格</div>
+          <div class="tool">结果导出</div>
+        </div>
+      </div>
+
+      <aside class="reading">
+        <div class="reading-head">阅读顺序</div>
+        <div class="read-card">
+          <div class="num">1</div>
+          <strong>先看 VehicleStateInput<br />确认信号单位</strong>
+          <span>确认传感器、单位、坐标系和含义是否符合预期。</span>
+        </div>
+        <div class="read-card">
+          <div class="num">2</div>
+          <strong>再看目标生成和横摆控制</strong>
+          <span>理解 wr_d / beta_d 的计算依据，以及 PID/MPC 的控制逻辑。</span>
+        </div>
+        <div class="read-card">
+          <div class="num">3</div>
+          <strong>再看扭矩请求、分配和限幅</strong>
+          <span>理解基础扭矩如何生成、如何分配，以及限幅逻辑如何保护执行器。</span>
+        </div>
+        <div class="read-card">
+          <div class="num">4</div>
+          <strong>最后用 DiagnosticsLogging<br />检查结果</strong>
+          <span>查看关键输出曲线、统计和警告，验证控制效果与边界条件。</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="warning">
+      <div class="warn-item">
+        <div class="warn-title">Bus 是接口边界</div>
+        <div class="warn-copy">字段名、类型和含义是模块间契约，随意修改会导致下游模块失效。</div>
+      </div>
+      <div class="warn-item">
+        <div class="warn-title">Manual Switch 会改变评估结果</div>
+        <div class="warn-copy">PID/MPC 和载荷比例法/QP 的选择需要在每次结果记录中写清楚。</div>
+      </div>
+      <div class="warn-item">
+        <div class="warn-title">Quickstart 不等于验证完成</div>
+        <div class="warn-copy">这张图只说明结构和数据流，不能替代长工况、多工况联合仿真、DIL 实时仿真和实车验证。</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -14,7 +14,7 @@ flowchart TD
     B --> C["MATLAB + Simulink + CarSim 联合仿真"]
     C --> D["按实车传感器约束重建可落地模型"]
     D --> E["验证控制算法有效性"]
-    E --> F["DLI 驾驶员在环实时仿真"]
+    E --> F["DIL 驾驶员在环实时仿真"]
     F --> G["MATLAB 算法转写为 C 语言"]
     G --> H["嵌入式开发与主程序对齐"]
     H --> I["上车测试与控制架构整合"]
@@ -75,7 +75,7 @@ flowchart TD
 
     usable --> carsim["与 CarSim 联合仿真"]
     carsim --> verify["验证稳定性<br/>响应性<br/>可实现性"]
-    verify --> next["进入后续 DLI / 嵌入式阶段"]
+    verify --> next["进入后续 DIL / 嵌入式阶段"]
 
     style sensor_gate fill:#fff2cc
     style fake fill:#f4cccc
@@ -155,9 +155,9 @@ flowchart LR
 
 这样做的意义，是保证后续“从仿真到上车”的技术链条是连续的，而不是仿真和实车完全脱节。
 
-## 4. DLI 驾驶员在环仿真
+## 4. DIL 驾驶员在环仿真
 
-在完成基础联合仿真之后，下一阶段是 DLI，即驾驶员在环仿真。
+在完成基础联合仿真之后，下一阶段是 DIL，即 Driver-in-the-Loop，驾驶员在环仿真。
 
 它和前一阶段的关系，可以直接理解成下面这个升级过程：
 
@@ -165,24 +165,24 @@ flowchart LR
 flowchart TD
     offline["离线联合仿真<br/>CarSim + Simulink"] --> realtime["改成实时仿真模式"]
     realtime --> human["驾驶员接入闭环"]
-    human --> dli["DLI 驾驶员在环"]
+    human --> dil["DIL 驾驶员在环"]
 
-    dli --> eval1["观察人车闭环稳定性"]
-    dli --> eval2["观察主观驾驶感受"]
-    dli --> eval3["观察控制介入是否自然"]
+    dil --> eval1["观察人车闭环稳定性"]
+    dil --> eval2["观察主观驾驶感受"]
+    dil --> eval3["观察控制介入是否自然"]
 
     style offline fill:#e8f0fe
-    style dli fill:#fff2cc
+    style dil fill:#fff2cc
 ```
 
-如果单独把 DLI 的闭环结构展开，可以表示成下面这样：
+如果单独把 DIL 的闭环结构展开，可以表示成下面这样：
 
 ```mermaid
 flowchart LR
     driver["驾驶员"] --> wheel["方向盘 / 油门 / 制动操作"]
     wheel --> rt["实时仿真平台"]
 
-    subgraph dli["DLI 人在环闭环"]
+    subgraph dil["DIL 人在环闭环"]
         rt --> controller["Simulink 实时控制器"]
         controller --> carsim["CarSim 实时整车模型"]
         carsim --> feedback["车辆运动反馈<br/>画面 / 方向盘感受 / 响应"]
@@ -209,15 +209,15 @@ flowchart LR
 
 但目前这一阶段还没有做得很好，主要原因在于：
 
-- DLI 对模型实时性要求高；
-- DLI 对整车模型精度要求高；
-- DLI 对控制器与车辆模型的耦合一致性要求也更高。
+- DIL 对模型实时性要求高；
+- DIL 对整车模型精度要求高；
+- DIL 对控制器与车辆模型的耦合一致性要求也更高。
 
 这三个限制项之间的关系，可以看成一个“同时卡脖子”的约束三角：
 
 ```mermaid
 flowchart LR
-    rt["实时性"] --> quality["DLI 效果"]
+    rt["实时性"] --> quality["DIL 效果"]
     acc["模型精度"] --> quality
     couple["控制器与车辆模型一致性"] --> quality
 
@@ -431,7 +431,7 @@ flowchart TD
     algo --> mpc["MPC 做进阶与答辩"]
 
     verify["验证路线"] --> sim["联合仿真"]
-    verify --> dli["DLI 驾驶员在环"]
+    verify --> dil["DIL 驾驶员在环"]
     verify --> real["嵌入式 + 实车"]
 
     eng["工程路线"] --> sensor["严格受实车传感器约束"]
@@ -457,7 +457,7 @@ flowchart TD
 ### 7.2 验证层面
 
 - 先做 MATLAB + Simulink + CarSim 联合仿真；
-- 再推进 DLI 驾驶员在环仿真；
+- 再推进 DIL 驾驶员在环仿真；
 - 最终转向嵌入式和实车验证。
 
 ### 7.3 工程层面
@@ -475,7 +475,7 @@ flowchart TD
 
 用于论文、汇报或答辩时，可以这样概括：
 
-> 本项目首先通过文献调研比较不同横摆稳定性控制算法，确定 PID 保底、MPC 进阶的双层路线。随后在 MATLAB/Simulink 与 CarSim 平台上开展联合仿真，并在建模阶段约束输入信号必须来自实车可获得的传感器，而不是直接使用仿真平台能够输出的全部理想遥测量。在此基础上，项目继续面向 DLI 驾驶员在环实时仿真、C 代码转写、嵌入式集成和实车测试推进。工程集成上，短期可以采用 DYC 附加子系统实现扭矩修正；长期更适合在主程序中统一管理 DYC、TCS、Launch Control 等扭矩相关控制，减少控制器之间的冲突。
+> 本项目首先通过文献调研比较不同横摆稳定性控制算法，确定 PID 保底、MPC 进阶的双层路线。随后在 MATLAB/Simulink 与 CarSim 平台上开展联合仿真，并在建模阶段约束输入信号必须来自实车可获得的传感器，而不是直接使用仿真平台能够输出的全部理想遥测量。在此基础上，项目继续面向 DIL 驾驶员在环实时仿真、C 代码转写、嵌入式集成和实车测试推进。工程集成上，短期可以采用 DYC 附加子系统实现扭矩修正；长期更适合在主程序中统一管理 DYC、TCS、Launch Control 等扭矩相关控制，减少控制器之间的冲突。
 
 ## 9. 后续可继续补充的内容
 
@@ -484,6 +484,6 @@ flowchart TD
 1. 论文调研中比较过哪些控制算法，各自优缺点是什么。
 2. MATLAB/Simulink 联合仿真的具体模型结构。
 3. 当前实车实际具备哪些传感器，以及哪些信号最关键。
-4. DLI 目前做得不好的具体原因，是模型精度、实时性还是接口问题。
+4. DIL 目前做得不好的具体原因，是模型精度、实时性还是接口问题。
 5. MATLAB 转 C 时已经遇到的实际 bug 和对齐问题。
 6. 主程序模式下，DYC/TCS/Launch Control 应该如何统一调度。

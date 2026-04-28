@@ -2,6 +2,12 @@
 
 面向 FSAE 的开源电控算法验证平台，当前重点是四轮独立驱动场景下的直接横摆力矩控制（Direct Yaw Moment Control, DYC）。项目使用 MATLAB/Simulink 搭建控制算法，并通过 CarSim + Simulink 闭环联合仿真验证车辆稳定性控制链路。
 
+## 开源初衷
+
+这份开源算法，是我 FSAE 生涯的最后一舞。它最初是写给学弟们的：希望后来的人不必从零开始，也不必把一代代踩过的坑重新踩一遍。可我想了很久，单靠一支车队维护的算法体系终究是有限的，也可能随着人员更替慢慢失传。起初我也顾虑，把原本属于车队的积累公开给所有车队，会不会对不起自己的学弟们；但现在我更相信，真正能让一套方法留下来的，不是把它锁在某个文件夹里，而是让更多人使用、质疑、修正和继续建设。
+
+只有竞争才会变强，只有持续被使用才不会失传。因此，这次开源不仅是给我的学弟们，也希望能为 FSAE CN 赛区的算法进步尽一点力。我也在这里真诚呼吁各位前辈、各位工程师朋友、各位师弟师妹们一起参与，持续完善 CN 赛区的算法设计、仿真验证和测试体系。一枝独秀不是春，百花齐放春满园。来探索吧，来为 CN FSAE 的算法生态添砖加瓦。
+
 这个仓库主要放这些内容：
 
 - DYC 横摆稳定性控制：PID 保底方案 + MPC 进阶方案。
@@ -15,7 +21,11 @@
 
 > 先看给项目成员和新同学准备的内容；文末单独放了 Agent 工作流说明，普通使用者可以先跳过。
 
-![EVO_Control_System 中文 Quickstart](docs/assets/quickstart/evo-control-system-block-quickstart.png)
+如果需要拆开阅读，下面两张图分别说明主控制链路和诊断旁路：
+
+![EVO_Control_System 主控制链路](docs/assets/quickstart/evo-control-system-main-flow.png)
+
+![EVO_Control_System 诊断与阅读顺序](docs/assets/quickstart/evo-control-system-diagnostics.png)
 
 ## 开发版本说明
 
@@ -162,6 +172,8 @@ CarSim S-Function.y1 -> EVO_Control_System.sensor
 EVO_Control_System.T -> CarSim S-Function.u1
 ```
 
+`EVO_Control_System` 内部按 Bus 化主控制链路组织。主链路、诊断旁路和阅读顺序见文档开头的两张 Quickstart 图。
+
 ### 6. 从 Simulink 运行联合仿真
 
 优先在 CarSim 发送过来的 Simulink 模型窗口中直接运行仿真，这样最容易保持当前 CarSim Run 与 Simulink S-Function 上下文一致。
@@ -225,7 +237,7 @@ table(results)
 - 已知本地工作流可以通过 MATLAB/Simulink 调用 CarSim S-Function 做有限时长闭环仿真，但每次复现仍依赖本机 CarSim 路径、许可证、模型数据库和 solver 链接状态。
 - `docs/control_evo_technical_design.md` 中的算法说明基于当前仓库文件、Simulink 静态读取结果和已确认项目状态整理，不新增额外仿真结论。
 - CarSim 求解器内部轮胎模型与 Simulink 控制侧轮胎查表是两条不同链路：前者用于整车动力学求解，后者用于控制分配限幅。
-- 项目后续还需要 DLI 实时仿真、代码生成/嵌入式移植和实车验证，不能把离线联合仿真等同于最终上车结论。
+- 项目后续还需要 DIL 实时仿真、代码生成/嵌入式移植和实车验证，不能把离线联合仿真等同于最终上车结论。
 
 ## 进一步阅读
 
@@ -238,7 +250,7 @@ table(results)
 
 这一节给自动化助手和模型维护工具链使用。普通开发者只想打开项目、跑联合仿真或理解算法时，可以先看上面的内容。
 
-本项目支持 Agent 参与辅助设计、排查和文档维护。适合交给 Agent 的工作包括公式核对、MATLAB 函数检查、测试补充、模型结构静态读取、README/技术文档维护和验证边界说明；涉及 CarSim GUI、长工况、DLI 或实车结论时，必须以实际运行证据为准。
+本项目支持 Agent 参与辅助设计、排查和文档维护。适合交给 Agent 的工作包括公式核对、MATLAB 函数检查、测试补充、模型结构静态读取、README/技术文档维护和验证边界说明；涉及 CarSim GUI、长工况、DIL 或实车结论时，必须以实际运行证据为准。
 
 ### 推荐安装的 Agent 工具链
 
@@ -267,7 +279,7 @@ Agent 进入仓库后按这个顺序建立上下文：
 1. 如果本地存在私有协作规则文件，先读本地规则；这类文件通常包含机器路径、工具链配置和协作约定，不随公开仓库提交。
 2. 再读本 `README.md`，理解普通用户的主入口是 CarSim 侧 `Send to Simulink`。
 3. 读 `docs/control_evo_technical_design.md`，掌握 DYC 车辆动力学公式、PID/MPC、QP 分配、轮胎查表和电机限扭链路。
-4. 读 `DYC_设计流程说明.md`，理解项目从联合仿真到 DLI、嵌入式和实车集成的长期路线。
+4. 读 `DYC_设计流程说明.md`，理解项目从联合仿真到 DIL、嵌入式和实车集成的长期路线。
 
 常用文件入口：
 
