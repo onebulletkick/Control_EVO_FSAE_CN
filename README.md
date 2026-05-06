@@ -77,14 +77,22 @@ EVO_Control_System.T -> CarSim S-Function.u1
 ├── README.md
 │   └── GitHub 仓库主页说明
 ├── carsim_models/
-│   └── E_example.zip
-│       └── CarSim 示例模型压缩包
+│   ├── E_example.zip
+│   │   └── 主 DYC 联合仿真示例 CarSim 数据库包
+│   └── DIL_example.zip
+│       └── DIL 示例 CarSim 数据库包
 ├── docs/
 │   └── control_evo_technical_design.md
 │       └── 完整技术设计文档，包含公式、架构和算法说明
 ├── control_EVO/
 │   ├── DYC_1_9_test.slx
 │   │   └── 当前主 Simulink + CarSim 联合仿真模型
+│   ├── DIL_26_5_1.slx
+│   │   └── DIL 示例 Simulink + CarSim 联合仿真模型
+│   ├── DIL_26_5_1_2025b.slx
+│   │   └── 面向 MATLAB/Simulink R2025b 的兼容模型
+│   ├── DIL_26_5_1_2023b.slx
+│   │   └── 面向 MATLAB/Simulink R2023b 的兼容模型
 │   ├── simfile.template.sim
 │   │   └── CarSim `.sim` 文件模板，实际运行文件由本机 CarSim 生成
 │   ├── DYC_vehicle_params.m
@@ -96,7 +104,9 @@ EVO_Control_System.T -> CarSim S-Function.u1
 │   ├── DYC_simple_load_transfer_distribution.m
 │   │   └── 载荷比例法扭矩分配
 │   ├── QP_TorqueDistribution.m
-│   │   └── QP 四轮扭矩分配
+│   │   └── QP 四轮扭矩分配 Level-2 S-Function 包装器
+│   ├── qp_torque_distribution_core.m
+│   │   └── QP 扭矩分配核心算法，供 S-Function 和测试复用
 │   ├── DYC_tire_lookup_config.m
 │   │   └── 控制侧轮胎查表配置，默认 mode = 'pacejka'
 │   ├── DYC_motor_wheel_torque_limit.m
@@ -123,7 +133,7 @@ EVO_Control_System.T -> CarSim S-Function.u1
 - CarSim 2024 或兼容版本，并具备有效许可证。
 - CarSim 的 MATLAB solver/S-Function 路径可被 MATLAB 解析。
 
-仓库内的 `carsim_models/E_example.zip` 是示例 CarSim 模型包。CarSim 是商业软件，仓库不包含 CarSim 程序本体或许可证。
+仓库内的 `carsim_models/E_example.zip` 是主 DYC 联合仿真示例包，`carsim_models/DIL_example.zip` 是 DIL 示例数据库包。CarSim 是商业软件，仓库不包含 CarSim 程序本体或许可证。
 
 ### 2. 克隆仓库
 
@@ -151,7 +161,20 @@ cd Control_EVO
 
 这条路径最接近实际联合仿真，因为 CarSim 会把当前数据库、Run 配置和 S-Function 上下文带到 Simulink 侧。
 
-### 4. 在 MATLAB 会话中加入项目路径
+### 4. DIL 示例模型使用
+
+如果要体验 DIL 示例链路，先导入或解压 `carsim_models/DIL_example.zip`，再在 CarSim 中选择 DIL 对应 Run，并从该 Run 执行 `Send to Simulink`。正常情况下，DIL 示例应打开 `control_EVO/DIL_26_5_1.slx`。
+
+`DIL_26_5_1.slx` 是当前主 DIL 示例模型。若本机只能使用旧版 MATLAB/Simulink，可优先打开对应兼容模型：
+
+- `control_EVO/DIL_26_5_1_2025b.slx`
+- `control_EVO/DIL_26_5_1_2023b.slx`
+
+使用旧版兼容模型时，不要直接回存覆盖主模型。若需要长期维护旧版本模型，应在独立分支中验证后再提交。
+
+DIL 示例链路更依赖当前 CarSim Run 的 Import/Export 通道、Live Video/Live Data Server、方向盘、踏板等本机硬件状态。模型能打开或 update 通过，只能说明当前模型和 S-Function 链路具备基础可用性，不等于完整 DIL 工况、力反馈或实时硬件闭环已经通过。
+
+### 5. 在 MATLAB 会话中加入项目路径
 
 CarSim 打开 Simulink 后，在同一个 MATLAB 会话中加入本仓库控制代码路径：
 
@@ -174,7 +197,7 @@ which vs_sf
 
 如果 `which Solver_SF` 或 `which vs_sf` 为空，说明 CarSim 的 Simulink S-Function 路径还没加好，模型更新或仿真会失败。
 
-### 5. 确认 Simulink 闭环模型
+### 6. 确认 Simulink 闭环模型
 
 主模型应为 `control_EVO/DYC_1_9_test.slx`。打开后应能看到 CarSim S-Function 与 `EVO_Control_System` 控制系统闭环连接：
 
@@ -185,7 +208,7 @@ EVO_Control_System.T -> CarSim S-Function.u1
 
 `EVO_Control_System` 内部按 Bus 化主控制链路组织。主链路、诊断旁路和阅读顺序见文档开头的两张 Quickstart 图。
 
-### 6. 从 Simulink 运行联合仿真
+### 7. 从 Simulink 运行联合仿真
 
 优先在 CarSim 发送过来的 Simulink 模型窗口中直接运行仿真，这样最容易保持当前 CarSim Run 与 Simulink S-Function 上下文一致。
 
@@ -248,7 +271,8 @@ table(results)
 - 已知本地工作流可以通过 MATLAB/Simulink 调用 CarSim S-Function 做有限时长闭环仿真，但每次复现仍依赖本机 CarSim 路径、许可证、模型数据库和 solver 链接状态。
 - `docs/control_evo_technical_design.md` 中的算法说明基于当前仓库文件、Simulink 静态读取结果和已确认项目状态整理，不新增额外仿真结论。
 - CarSim 求解器内部轮胎模型与 Simulink 控制侧轮胎查表是两条不同链路：前者用于整车动力学求解，后者用于控制分配限幅。
-- 项目后续还需要 DIL 实时仿真、代码生成/嵌入式移植和实车验证，不能把离线联合仿真等同于最终上车结论。
+- DIL 示例模型的基础检查可以包括导入 `DIL_example.zip`、确认 `DIL_26_5_1.slx` 能由 CarSim `Send to Simulink` 打开、检查当前 `simfile.sim` 或 CarSim Run 的 Import/Export 通道数与 Simulink 模型端口一致，并进行模型 update 或短时 smoke；这些检查不等于方向盘、踏板、力反馈、Live Video 或完整实时硬件闭环已经通过。
+- 项目后续仍需要完整 DIL 实时仿真、代码生成/嵌入式移植和实车验证，不能把离线联合仿真等同于最终上车结论。
 
 ## 进一步阅读
 
@@ -297,8 +321,10 @@ Agent 进入仓库后按这个顺序建立上下文：
 
 ```text
 control_EVO/DYC_1_9_test.slx                 主 Simulink + CarSim 联合仿真模型
+control_EVO/DIL_26_5_1.slx                   DIL 示例 Simulink + CarSim 联合仿真模型
 control_EVO/DYC_vehicle_params.m             统一车辆参数
-control_EVO/QP_TorqueDistribution.m          QP 四轮扭矩分配
+control_EVO/QP_TorqueDistribution.m          QP 四轮扭矩分配 Level-2 S-Function 包装器
+control_EVO/qp_torque_distribution_core.m    QP 扭矩分配核心算法
 control_EVO/DYC_simple_load_transfer_distribution.m  载荷比例法分配
 control_EVO/DYC_tire_lookup_config.m         轮胎查表模式配置
 control_EVO/tire_modeling/tests/             轮胎查表与分配相关测试
