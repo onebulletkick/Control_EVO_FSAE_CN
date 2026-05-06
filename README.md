@@ -21,6 +21,17 @@
 
 > 先看给项目成员和新同学准备的内容；文末单独放了 Agent 工作流说明，普通使用者可以先跳过。
 
+## 参与交流
+
+项目还在持续整理和验证中，欢迎 FSAE 车队同学、算法方向开发者和对 Simulink/CarSim 联合仿真感兴趣的朋友一起参与。建议先加入 QQ 群，方便交流环境配置、模型复现、问题反馈和后续开发任务。
+
+- QQ 群：`1094455126`（FSAE算法开源群）
+- 飞书 Wiki：[Control_EVO 协作文档](https://rcnbxqkuldqh.feishu.cn/wiki/MN6YwSJR9i6QuKk2UcVcGXmSnid)
+
+<p align="center">
+  <img src="docs/assets/community/qq-group-qrcode.jpg" alt="FSAE算法开源群 QQ 群二维码" width="360">
+</p>
+
 如果需要拆开阅读，下面两张图分别说明主控制链路和诊断旁路：
 
 ![EVO_Control_System 主控制链路](docs/assets/quickstart/evo-control-system-main-flow.png)
@@ -245,6 +256,7 @@ table(results)
 - [DYC 设计流程说明](DYC_设计流程说明.md)
 - [轮胎控制查表说明](control_EVO/tire_modeling/README.md)
 - [Round9 Pacejka 工程包说明](control_EVO/round9_pacejka_engineering_package/README.md)
+- [飞书 Wiki 协作文档](https://rcnbxqkuldqh.feishu.cn/wiki/MN6YwSJR9i6QuKk2UcVcGXmSnid)
 
 ## Agent 工作流
 
