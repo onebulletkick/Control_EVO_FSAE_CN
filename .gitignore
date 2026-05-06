@@ -32,9 +32,11 @@ tmp/
 
 # Local agent instructions; keep machine-specific workflow rules out of public commits
 AGENTS.md
+CLAUDE.md
 
 # Local Claude Code runtime/config with personal API keys
 .claude/settings.local.json
+.mcp.json
 
 # Local smoke-test models generated while validating MCP setup
 tools/mcp_smoke/
@@ -51,3 +53,12 @@ control_EVO/论文参考/
 
 # Agent-internal planning notes
 docs/superpowers/
+.planning/
+
+# Local experiment and packaged model artifacts
+control_EVO/control_EVO.zip
+control_EVO/inring_test.slx
+control_EVO/test_joystick.slx
+
+# Environment variables
+.env

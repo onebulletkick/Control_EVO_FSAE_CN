@@ -20,7 +20,17 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
         function buildModelOnce(testCase)
             % Hoosier模型由原始TTC数据生成一次，后续用例复用以减少测试时间。
             projectRoot = fileparts(testCase.ControlFolder);
-            testCase.Model = build_hoosier43075_model(projectRoot);
+            try
+                testCase.Model = build_hoosier43075_model(projectRoot);
+            catch ME
+                if ~strcmp(ME.identifier, 'build_hoosier43075_model:missingFolder')
+                    rethrow(ME);
+                end
+                modelFile = fullfile(testCase.ModelingFolder, 'outputs', ...
+                    'hoosier43075_control_model.mat');
+                loaded = load(modelFile, 'model');
+                testCase.Model = loaded.model;
+            end
         end
     end
 
@@ -30,14 +40,14 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
             setenv('TIRE_CONTROL_LOOKUP_MODE', 'hoosier');
             setenv('TIRE_CONTROL_MODEL_FILE', '');
             setenv('PACEJKA_CONTROL_MODEL_FILE', '');
-            clear QP_TorqueDistribution DYC_torque_request_manager
+            clear qp_torque_distribution_core DYC_torque_request_manager
         end
     end
 
     methods (TestMethodTeardown)
         function resetSFunctionState(~)
-            % 清除S-Function持久状态和环境变量，保证测试互不污染。
-            clear QP_TorqueDistribution DYC_torque_request_manager
+            % 清除核心函数持久状态和环境变量，保证测试互不污染。
+            clear qp_torque_distribution_core DYC_torque_request_manager
             setenv('HOOSIER43075_MODEL_FILE', '');
             setenv('TIRE_CONTROL_LOOKUP_MODE', '');
             setenv('TIRE_CONTROL_MODEL_FILE', '');
@@ -68,8 +78,7 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
             % 连续两拍差动扭矩变化量不能超过QP内部限斜率。
             u = testCase.sampleInput(0, 600, 1.0, zeros(4, 1));
             firstDelta = testCase.runTorqueDistribution(u);
-            secondOutput = QP_TorqueDistribution(0.0005, firstDelta, u, 3);
-            secondDelta = secondOutput(1:4);
+            [secondDelta, ~, ~] = qp_torque_distribution_core(u, firstDelta, [], false, false);
             maxDeltaStep = testCase.maxTorqueStep();
 
             testCase.verifyLessThanOrEqual(abs(firstDelta), ...
@@ -88,9 +97,9 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
             shrink = u;
             shrink(1:4) = [70; 70; 70; 70];
             shrink(5:8) = [80; 80; 80; 80];
-            afterOutput = QP_TorqueDistribution(160 * 0.0005, beforeShrink, ...
-                shrink, 3);
-            afterDelta = afterOutput(1:4);
+            [afterDelta, afterDiagnostics, ~] = qp_torque_distribution_core(...
+                shrink, beforeShrink, [], false, false);
+            afterOutput = [afterDelta; afterDiagnostics];
             candidateTorque = testCase.candidateTorque(afterOutput, shrink);
             roadLimit = testCase.roadMuLimit(shrink);
 
@@ -105,9 +114,9 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
 
             invalidDemand = u;
             invalidDemand(11) = NaN;
-            output = QP_TorqueDistribution(20 * 0.0005, lastDelta, ...
-                invalidDemand, 3);
-            deltaTorque = output(1:4);
+            [deltaTorque, diagnostics, ~] = qp_torque_distribution_core(...
+                invalidDemand, lastDelta, [], false, false);
+            output = [deltaTorque; diagnostics];
 
             testCase.verifySize(output, [10 1]);
             testCase.verifyTrue(all(isfinite(output)));
@@ -225,7 +234,7 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
         function testMissingLookupFallsBackToRoadMu(testCase)
             missingModel = fullfile(tempdir, 'missing_hoosier43075_model.mat');
             setenv('HOOSIER43075_MODEL_FILE', missingModel);
-            clear QP_TorqueDistribution
+            clear qp_torque_distribution_core
 
             u = testCase.sampleInput(0, 25, 0.75, [50; 50; 50; 50]);
             output = testCase.runTorqueDistributionOutput(u);
@@ -296,14 +305,17 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(abs(output(5)), 1000);
         end
 
-        function testSFunctionInterfaceRemainsCompatible(testCase)
-            [sys, x0, str, ts] = QP_TorqueDistribution([], [], [], 0);
-
-            testCase.verifyEqual(sys(3), 10); % 输出数量
-            testCase.verifyEqual(sys(4), 21); % 输入数量
-            testCase.verifyEqual(x0, zeros(4, 1));
-            testCase.verifyEmpty(str);
-            testCase.verifyEqual(ts, [0.0005 0]);
+        function testCoreFunctionInterfaceReturnsExpectedSizes(testCase)
+            % 验证核心函数输出维度与原S-Function接口一致。
+            u = testCase.sampleInput(0, 40, 1.0, zeros(4,1));
+            [deltaTorque, diagnostics, lastDeltaTorque, tireModel, tireModelReady, tireModelLoadFailed] = ...
+                qp_torque_distribution_core(u, zeros(4,1), [], false, false);
+            testCase.verifySize(deltaTorque, [4 1]);
+            testCase.verifySize(diagnostics, [6 1]);
+            testCase.verifySize(lastDeltaTorque, [4 1]);
+            testCase.verifyTrue(isstruct(tireModel) || isempty(tireModel));
+            testCase.verifyTrue(islogical(tireModelReady) || isnumeric(tireModelReady));
+            testCase.verifyTrue(islogical(tireModelLoadFailed) || isnumeric(tireModelLoadFailed));
         end
     end
 
@@ -341,39 +353,34 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
         end
 
         function deltaTorque = runTorqueDistribution(~, u)
-            % 初始化S-Function后取前4路差动扭矩输出。
-            QP_TorqueDistribution([], [], [], 0);
-            output = QP_TorqueDistribution(0, zeros(4, 1), u, 3);
-            deltaTorque = output(1:4);
+            % 调用核心算法取前4路差动扭矩输出。
+            [deltaTorque, ~, ~] = qp_torque_distribution_core(u, zeros(4, 1), [], false, false);
         end
 
         function output = runTorqueDistributionOutput(~, u)
             % 返回完整10路输出，便于检查诊断量。
-            QP_TorqueDistribution([], [], [], 0);
-            output = QP_TorqueDistribution(0, zeros(4, 1), u, 3);
-            output = output(:);
+            [deltaTorque, diagnostics, ~] = qp_torque_distribution_core(u, zeros(4, 1), [], false, false);
+            output = [deltaTorque; diagnostics];
         end
 
         function deltaTorque = runForSteps(~, u, stepCount)
             % 连续运行多拍，用于观察限斜率和物理边界收敛过程。
-            QP_TorqueDistribution([], [], [], 0);
-            deltaTorque = zeros(4, 1);
+            lastDeltaTorque = zeros(4, 1);
+            tireModel = []; tireModelReady = false; tireModelLoadFailed = false;
             for i = 1:stepCount
-                output = QP_TorqueDistribution((i - 1) * 0.0005, ...
-                    deltaTorque, u, 3);
-                deltaTorque = output(1:4);
+                [deltaTorque, ~, lastDeltaTorque, tireModel, tireModelReady, tireModelLoadFailed] = ...
+                    qp_torque_distribution_core(u, lastDeltaTorque, tireModel, tireModelReady, tireModelLoadFailed);
             end
         end
 
         function output = runForStepsOutput(~, u, stepCount)
-            QP_TorqueDistribution([], [], [], 0);
-            deltaTorque = zeros(4, 1);
+            lastDeltaTorque = zeros(4, 1);
+            tireModel = []; tireModelReady = false; tireModelLoadFailed = false;
             output = zeros(10, 1);
             for i = 1:stepCount
-                output = QP_TorqueDistribution((i - 1) * 0.0005, ...
-                    deltaTorque, u, 3);
-                output = output(:);
-                deltaTorque = output(1:4);
+                [deltaTorque, diagnostics, lastDeltaTorque, tireModel, tireModelReady, tireModelLoadFailed] = ...
+                    qp_torque_distribution_core(u, lastDeltaTorque, tireModel, tireModelReady, tireModelLoadFailed);
+                output = [deltaTorque; diagnostics];
             end
         end
 
@@ -419,9 +426,10 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
         function [driveOutput, brakeOutput, rawBase, brakeBase, driveBase] = ...
                 runQpThroughBrakeRequest(testCase)
             % 复现油门-刹车序列，验证基础扭矩管理器在QP前完成平滑使能。
-            clear QP_TorqueDistribution DYC_torque_request_manager
+            clear qp_torque_distribution_core DYC_torque_request_manager
             DYC_torque_request_manager(0, 0, true);
-            deltaTorque = zeros(4, 1);
+            lastDeltaTorque = zeros(4, 1);
+            tireModel = []; tireModelReady = false; tireModelLoadFailed = false;
             output = zeros(10, 1);
             rawBase = zeros(4, 1);
             baseAlloc = zeros(4, 1);
@@ -429,9 +437,11 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
                 [baseAlloc, rawBase] = DYC_torque_request_manager(1, 0);
                 u = testCase.sampleInput(0, 0, 1.0, zeros(4, 1), ...
                     baseAlloc, 1, zeros(4, 1));
-                output = QP_TorqueDistribution((i - 1) * 0.0005, ...
-                    deltaTorque, u, 3);
-                deltaTorque = output(1:4);
+                [deltaTorque, diagnostics, lastDeltaTorque, ...
+                    tireModel, tireModelReady, tireModelLoadFailed] = ...
+                    qp_torque_distribution_core(u, lastDeltaTorque, ...
+                    tireModel, tireModelReady, tireModelLoadFailed);
+                output = [deltaTorque; diagnostics];
             end
             driveOutput = output(:);
             driveBase = baseAlloc;
@@ -440,9 +450,11 @@ classdef qpTorqueDistributionHoosierLookupTest < matlab.unittest.TestCase
                 [baseAlloc, rawBase] = DYC_torque_request_manager(1, 1);
                 u = testCase.sampleInput(0, 0, 1.0, zeros(4, 1), ...
                     baseAlloc, 1, zeros(4, 1));
-                output = QP_TorqueDistribution((260 + i - 1) * 0.0005, ...
-                    deltaTorque, u, 3);
-                deltaTorque = output(1:4);
+                [deltaTorque, diagnostics, lastDeltaTorque, ...
+                    tireModel, tireModelReady, tireModelLoadFailed] = ...
+                    qp_torque_distribution_core(u, lastDeltaTorque, ...
+                    tireModel, tireModelReady, tireModelLoadFailed);
+                output = [deltaTorque; diagnostics];
             end
             brakeOutput = output(:);
             brakeBase = baseAlloc;
