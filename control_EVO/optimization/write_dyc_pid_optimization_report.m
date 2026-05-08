@@ -115,14 +115,20 @@ if ~hasBest
 end
 
 lines = [
-    "mdl = '" + cfg.modelName + "';"
-    "pidBlock = [mdl '/EVO_Control_System/YawMomentControl/PID_YawMomentController'];"
+    "mdl = " + localMatlabCharLiteral(cfg.modelName) + ";"
+    "pidBlock = " + localMatlabCharLiteral(cfg.pidBlock) + ";"
     "bestKp = " + string(best.Kp) + ";"
     "bestKi = " + string(best.Ki) + ";"
     "bestKd = " + string(best.Kd) + ";"
     "set_param(pidBlock, 'P', num2str(bestKp), 'I', num2str(bestKi), 'D', num2str(bestKd));"
 ];
 writelines(lines, cfg.bestPidScriptPath);
+end
+
+function literal = localMatlabCharLiteral(value)
+text = char(string(value));
+text = strrep(text, '''', '''''');
+literal = "'" + string(text) + "'";
 end
 
 function localWriteSummary(cfg, resultTable, best, hasBest, bayesoptResult)

@@ -39,6 +39,25 @@ classdef dycOptimizationOutputTest < matlab.unittest.TestCase
             testCase.verifyTrue(isfile(cfg.resultMatPath));
         end
 
+        function testApplyScriptUsesConfiguredPidBlock(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            customPidBlock = 'DYC_Custom/EVO_Control_System/YawMomentControlRenamed/PID_Custom';
+            cfg = dyc_pid_optimization_config(struct( ...
+                'modelName', 'DYC_Custom', ...
+                'pidBlock', customPidBlock, ...
+                'resultsDir', fixture.Folder, ...
+                'summaryPath', fullfile(fixture.Folder, 'summary.md'), ...
+                'bestPidScriptPath', fullfile(fixture.Folder, 'best_pid_set_param.m'), ...
+                'resultMatPath', fullfile(fixture.Folder, 'optimization_result.mat')));
+            result = localResult(1, 6100, 210, 15, "valid", 20.2);
+
+            write_dyc_pid_optimization_report(cfg, result, struct('MinObjective', 20.2));
+
+            scriptText = fileread(cfg.bestPidScriptPath);
+            testCase.verifyTrue(contains(scriptText, "pidBlock = '" + customPidBlock + "';"));
+            testCase.verifyFalse(contains(scriptText, '/EVO_Control_System/YawMomentControl/PID_YawMomentController'));
+        end
+
         function testReportDoesNotWriteExecutableApplyScriptForNoValidCandidates(testCase)
             fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
             cfg = dyc_pid_optimization_config(struct('resultsDir', fixture.Folder, 'summaryPath', fullfile(fixture.Folder, 'summary.md'), 'bestPidScriptPath', fullfile(fixture.Folder, 'best_pid_set_param.m'), 'resultMatPath', fullfile(fixture.Folder, 'optimization_result.mat')));
