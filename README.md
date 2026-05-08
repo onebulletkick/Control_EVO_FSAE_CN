@@ -93,6 +93,8 @@ EVO_Control_System.T -> CarSim S-Function.u1
 │   │   └── 面向 MATLAB/Simulink R2025b 的兼容模型
 │   ├── DIL_26_5_1_2023b.slx
 │   │   └── 面向 MATLAB/Simulink R2023b 的兼容模型
+│   ├── DIL_26_5_1_2020a.slx
+│   │   └── 面向 MATLAB/Simulink R2020a 的兼容模型
 │   ├── simfile.template.sim
 │   │   └── CarSim `.sim` 文件模板，实际运行文件由本机 CarSim 生成
 │   ├── DYC_vehicle_params.m
@@ -115,6 +117,8 @@ EVO_Control_System.T -> CarSim S-Function.u1
 │   │   └── 电机限扭、总功率限制和最终输出限幅
 │   ├── tire_modeling/
 │   │   └── Hoosier/Pacejka 控制查表生成、测试和输出
+│   ├── optimization/
+│   │   └── DYC PID 圈速优化工具、测试和结果输出目录
 │   └── round9_pacejka_engineering_package/
 │       └── TTC Round9 Pacejka 工程包和示例
 └── tools/
@@ -169,10 +173,13 @@ cd Control_EVO
 
 - `control_EVO/DIL_26_5_1_2025b.slx`
 - `control_EVO/DIL_26_5_1_2023b.slx`
+- `control_EVO/DIL_26_5_1_2020a.slx`
 
 使用旧版兼容模型时，不要直接回存覆盖主模型。若需要长期维护旧版本模型，应在独立分支中验证后再提交。
 
 DIL 示例链路更依赖当前 CarSim Run 的 Import/Export 通道、Live Video/Live Data Server、方向盘、踏板等本机硬件状态。模型能打开或 update 通过，只能说明当前模型和 S-Function 链路具备基础可用性，不等于完整 DIL 工况、力反馈或实时硬件闭环已经通过。
+
+完整 DIL 开发流程见 [DYC 设计流程说明：DIL 驾驶员在环仿真](DYC_设计流程说明.md#4-dil-驾驶员在环仿真)。
 
 ### 5. 在 MATLAB 会话中加入项目路径
 
@@ -265,12 +272,38 @@ results = runtests('control_EVO/tire_modeling/tests');
 table(results)
 ```
 
+### 可选：DYC PID 圈速优化
+
+`control_EVO/optimization/` 提供外部 MATLAB 工具，用固定 CarSim Run 的停止时间作为目标调节 `PID_YawMomentController` 的 `Kp`、`Ki`、`Kd`。使用前先做 preflight：
+
+```matlab
+repo = '<本地 Control_EVO 仓库路径>';
+addpath(fullfile(repo, 'control_EVO', 'optimization'));
+cfg = dyc_pid_optimization_config();
+report = run_dyc_pid_preflight(cfg)
+```
+
+默认 station-stop 工况入口：
+
+```matlab
+result = optimize_dyc_pid_laptime();
+```
+
+Autocross 停止事件工况入口：
+
+```matlab
+result = optimize_dyc_pid_autocross_laptime();
+```
+
+优化器通过 `SimulationInput` 在仿真候选中临时施加 PID 参数和 PID 模式，不为了调参保存 `DYC_1_9_test.slx`。详细说明见 [DYC PID 圈速优化工具说明](control_EVO/optimization/README.md)。
+
 ## 验证边界
 
 - 常规交互工作流应从 CarSim 侧 `Send to Simulink` 开始；MATLAB `sim(...)` 路径主要用于脚本化、自动化和 Agent 验证。
 - 已知本地工作流可以通过 MATLAB/Simulink 调用 CarSim S-Function 做有限时长闭环仿真，但每次复现仍依赖本机 CarSim 路径、许可证、模型数据库和 solver 链接状态。
 - `docs/control_evo_technical_design.md` 中的算法说明基于当前仓库文件、Simulink 静态读取结果和已确认项目状态整理，不新增额外仿真结论。
 - CarSim 求解器内部轮胎模型与 Simulink 控制侧轮胎查表是两条不同链路：前者用于整车动力学求解，后者用于控制分配限幅。
+- DYC PID 圈速优化只能说明固定 CarSim 工况和当前 `simfile.sim` 上的候选参数比较结果，不证明 DIL、实时硬件闭环或实车性能。
 - DIL 示例模型的基础检查可以包括导入 `DIL_example.zip`、确认 `DIL_26_5_1.slx` 能由 CarSim `Send to Simulink` 打开、检查当前 `simfile.sim` 或 CarSim Run 的 Import/Export 通道数与 Simulink 模型端口一致，并进行模型 update 或短时 smoke；这些检查不等于方向盘、踏板、力反馈、Live Video 或完整实时硬件闭环已经通过。
 - 项目后续仍需要完整 DIL 实时仿真、代码生成/嵌入式移植和实车验证，不能把离线联合仿真等同于最终上车结论。
 
@@ -279,6 +312,7 @@ table(results)
 - [完整技术设计文档](docs/control_evo_technical_design.md)
 - [DYC 设计流程说明](DYC_设计流程说明.md)
 - [轮胎控制查表说明](control_EVO/tire_modeling/README.md)
+- [DYC PID 圈速优化工具说明](control_EVO/optimization/README.md)
 - [Round9 Pacejka 工程包说明](control_EVO/round9_pacejka_engineering_package/README.md)
 - [飞书 Wiki 协作文档](https://rcnbxqkuldqh.feishu.cn/wiki/MN6YwSJR9i6QuKk2UcVcGXmSnid)
 
