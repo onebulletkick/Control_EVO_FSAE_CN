@@ -70,59 +70,27 @@ EVO_Control_System.T -> CarSim S-Function.u1
 
 ## 项目结构
 
+完整的跟踪文件与子项目说明见：[项目详细结构说明](docs/project_structure.md)。
+
 ```text
 .
 ├── DYC_设计流程说明.md
-│   └── 面向论文、答辩和工程路线说明的 DYC 设计流程
 ├── README.md
-│   └── GitHub 仓库主页说明
 ├── carsim_models/
-│   ├── E_example.zip
-│   │   └── 主 DYC 联合仿真示例 CarSim 数据库包
-│   └── DIL_example.zip
-│       └── DIL 示例 CarSim 数据库包
+│   └── CarSim 示例数据库压缩包
 ├── docs/
-│   └── control_evo_technical_design.md
-│       └── 完整技术设计文档，包含公式、架构和算法说明
+│   ├── control_evo_technical_design.md
+│   ├── project_structure.md
+│   └── assets/
 ├── control_EVO/
 │   ├── DYC_1_9_test.slx
-│   │   └── 当前主 Simulink + CarSim 联合仿真模型
-│   ├── DIL_26_5_1.slx
-│   │   └── DIL 示例 Simulink + CarSim 联合仿真模型
-│   ├── DIL_26_5_1_2025b.slx
-│   │   └── 面向 MATLAB/Simulink R2025b 的兼容模型
-│   ├── DIL_26_5_1_2023b.slx
-│   │   └── 面向 MATLAB/Simulink R2023b 的兼容模型
-│   ├── DIL_26_5_1_2020a.slx
-│   │   └── 面向 MATLAB/Simulink R2020a 的兼容模型
-│   ├── simfile.template.sim
-│   │   └── CarSim `.sim` 文件模板，实际运行文件由本机 CarSim 生成
-│   ├── DYC_vehicle_params.m
-│   │   └── 统一车辆参数入口
-│   ├── DYC_base_motor_torque.m
-│   │   └── 基础轮端扭矩请求计算
-│   ├── DYC_torque_request_manager.m
-│   │   └── 扭矩请求与制动平滑逻辑
-│   ├── DYC_simple_load_transfer_distribution.m
-│   │   └── 载荷比例法扭矩分配
-│   ├── QP_TorqueDistribution.m
-│   │   └── QP 四轮扭矩分配 Level-2 S-Function 包装器
-│   ├── qp_torque_distribution_core.m
-│   │   └── QP 扭矩分配核心算法，供 S-Function 和测试复用
-│   ├── DYC_tire_lookup_config.m
-│   │   └── 控制侧轮胎查表配置，默认 mode = 'pacejka'
-│   ├── DYC_motor_wheel_torque_limit.m
-│   │   └── 电机转速限扭
-│   ├── DYC_apply_motor_limits.m
-│   │   └── 电机限扭、总功率限制和最终输出限幅
+│   ├── DIL_26_5_1*.slx
+│   ├── DYC_*.m / QP_*.m / qp_*.m
 │   ├── tire_modeling/
-│   │   └── Hoosier/Pacejka 控制查表生成、测试和输出
 │   ├── optimization/
-│   │   └── DYC PID 圈速优化工具、测试和结果输出目录
 │   └── round9_pacejka_engineering_package/
-│       └── TTC Round9 Pacejka 工程包和示例
 └── tools/
-    └── 模型整理、轮胎模型和局部验证脚本
+    └── 模型整理、图生成和局部验证脚本
 ```
 
 第三方论文、CAJ、PDF 和个人阅读笔记不随开源仓库分发；如需复现文献阅读环境，请按公开来源重新获取。
@@ -310,6 +278,7 @@ result = optimize_dyc_pid_autocross_laptime();
 ## 进一步阅读
 
 - [完整技术设计文档](docs/control_evo_technical_design.md)
+- [项目详细结构说明](docs/project_structure.md)
 - [DYC 设计流程说明](DYC_设计流程说明.md)
 - [轮胎控制查表说明](control_EVO/tire_modeling/README.md)
 - [DYC PID 圈速优化工具说明](control_EVO/optimization/README.md)
