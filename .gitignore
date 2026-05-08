@@ -13,6 +13,7 @@ codegen/
 *_grt_rtw/
 *_rtw/
 *.log
+control_EVO/optimization/results/
 
 # Large raw data kept outside Git history
 Tire_data/
@@ -24,19 +25,8 @@ tmp/
 # Office temporary lock files
 ~$*
 
-# Local Codex / OMX runtime state
-.omx/
-
 # Local Obsidian workspace state
 .obsidian/
-
-# Local agent instructions; keep machine-specific workflow rules out of public commits
-AGENTS.md
-CLAUDE.md
-
-# Local Claude Code runtime/config with personal API keys
-.claude/settings.local.json
-.mcp.json
 
 # Local smoke-test models generated while validating MCP setup
 tools/mcp_smoke/
@@ -50,10 +40,6 @@ control_EVO/*.before_*.slx
 
 # Third-party research papers and notes kept locally, not redistributed
 control_EVO/论文参考/
-
-# Agent-internal planning notes
-docs/superpowers/
-.planning/
 
 # Local experiment and packaged model artifacts
 control_EVO/control_EVO.zip

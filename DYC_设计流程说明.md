@@ -155,6 +155,16 @@ flowchart LR
 
 这样做的意义，是保证后续“从仿真到上车”的技术链条是连续的，而不是仿真和实车完全脱节。
 
+### 3.1 PID 参数优化工具
+
+在联合仿真能够稳定复现以后，可以用外部优化工具辅助调节 PID 参数。当前仓库的 `control_EVO/optimization/` 目录提供了 DYC PID 圈速优化入口，用固定 CarSim Run 的停止时间评价 `Kp`、`Ki`、`Kd` 候选参数。
+
+这个工具的定位是“固定工况下的参数搜索”，不是新的控制架构。它通过 `Simulink.SimulationInput` 在单次候选仿真中临时设置 `PID_YawMomentController` 参数，并强制使用 PID 分支；优化过程不会为了调参保存 `DYC_1_9_test.slx`。
+
+默认入口 `optimize_dyc_pid_laptime()` 使用 station-stop 日志作为圈速指标，Autocross 入口 `optimize_dyc_pid_autocross_laptime()` 使用 CarSim 停止事件或外部控制停止时间作为目标。两者都依赖当前 CarSim 数据库、Run、`simfile.sim`、solver 路径和许可证状态。
+
+需要特别注意的是，PID 优化结果只能说明当前固定 CarSim 工况下的候选参数表现。它不能证明 DIL 实时链路、方向盘/踏板/力反馈、Live Video 或实车性能已经通过。进入 DIL 之前仍然要重新核对输入通道、传感器顺序、实时节奏和 Live Video 链路。
+
 ## 4. DIL 驾驶员在环仿真
 
 在完成基础联合仿真之后，下一阶段是 DIL，即 Driver-in-the-Loop，驾驶员在环仿真。
@@ -200,6 +210,53 @@ flowchart LR
 ```
 
 这一阶段的基本思路并不复杂，本质上就是把原来的 CarSim 联合 Simulink 仿真，进一步改为实时仿真模式，使驾驶员可以直接参与驾驶，从而更接近真实人车闭环。
+
+### 4.1 DIL 开发流程：从摇杆接口到 Live Video
+
+DIL 不是一上来就改控制算法，第一步应该先把驾驶输入和仿真接口顺序摸清楚。比较稳妥的开发顺序如下：
+
+```mermaid
+flowchart TD
+    joy["Joystick 接口测试<br/>方向盘 / 油门 / 制动"] --> order["记录每个输入和传感器的通道顺序"]
+    order --> label["在 Simulink 信号线上标注数据名称"]
+    label --> choose["选出控制器真正需要的传感器"]
+    choose --> carsim_if["修改 CarSim Import / Export 接口"]
+    carsim_if --> simulink_rt["Simulink 开启实时节奏<br/>EnablePacing=on, PacingRate=1"]
+    simulink_rt --> live_video["联合仿真模块切到 Live Video<br/>CarSim S-Function_video / vs_sfv"]
+    live_video --> smoke["短时 smoke 验证<br/>输入、画面、日志、通道顺序"]
+
+    style joy fill:#fce5cd
+    style order fill:#fff2cc
+    style label fill:#d9e8fb
+    style choose fill:#d9f2d9
+    style carsim_if fill:#ead1dc
+    style simulink_rt fill:#d9e8fb
+    style live_video fill:#fff2cc
+    style smoke fill:#d9f2d9
+```
+
+实际做的时候，建议先用 joystick 把方向盘、油门、制动等输入接口测通。每一路输入对应到模拟器或者 CarSim 的某个通道后，先记录顺序，再确认单位和方向是否符合预期。顺序确认完以后，再把每个传感器数据在线路上标好名称，例如车速、横摆角速度、纵向加速度、侧向加速度、方向盘转角、轮速、油门和制动状态。
+
+接口对齐时可以按下面这张表记录，避免后面改 CarSim 或 Simulink 时只凭记忆：
+
+| 通道序号 | 来源 | 数据名称 | 单位 | Simulink 信号线标签 | 控制器是否使用 | 验证方式 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Joystick / CarSim Export | 待填写 | 待填写 | 待填写 | 是 / 否 | Joystick 测试 / Scope / 日志 |
+| 2 | Joystick / CarSim Export | 待填写 | 待填写 | 待填写 | 是 / 否 | Joystick 测试 / Scope / 日志 |
+| 3 | Joystick / CarSim Export | 待填写 | 待填写 | 待填写 | 是 / 否 | Joystick 测试 / Scope / 日志 |
+
+CarSim 接口这一块本身没有太多复杂逻辑，关键是 Import 和 Export 的顺序不能错。Simulink 里的 Demux、Bus Creator、信号线名称和控制器输入都应该跟 CarSim 当前 Run 的通道顺序一致。只要 CarSim 侧调整了 Import/Export 通道，就要重新核对 `simfile.sim` 或当前 Run 展开的通道列表，再回到 Simulink 侧检查端口数量和线名。
+
+Simulink 侧还需要把仿真速度对齐到真实世界的速度。交互式操作可以在 Simulink 的 Simulation Pacing 里启用 pacing；脚本方式可以使用下面的模型参数：
+
+```matlab
+set_param('DIL_26_5_1', 'EnablePacing', 'on');
+set_param('DIL_26_5_1', 'PacingRate', '1');
+```
+
+`EnablePacing` 和 `PacingRate` 对应 Simulink 的 [Simulation Pacing Options](https://www.mathworks.com/help/simulink/slref/simulationpacingoptions.html)。`PacingRate = 1` 表示尽量按照 1 秒仿真时间对应 1 秒真实时间运行。这个设置适合 DIL 人在环观察和调试，但它只是让 Simulink 侧按真实时间节奏跑，不等于已经证明方向盘、踏板、力反馈或 CarSim Live Video 链路全部正常。
+
+最后一个很容易漏掉的点，是 DIL 示例要用 live-video 联合仿真链路。实施前应确认模型里的 CarSim 联合仿真模块是 `CarSim S-Function_video` / `vs_sfv` 这类 Live Video 入口，而不是普通离线联合仿真的 `vs_sf`。如果只用普通 `vs_sf`，模型可能能 update 或短时运行，但驾驶员看不到真正的 Live Video 实时画面，这不能当成完整 DIL 验证。
 
 它的意义在于：
 
@@ -457,6 +514,7 @@ flowchart TD
 ### 7.2 验证层面
 
 - 先做 MATLAB + Simulink + CarSim 联合仿真；
+- 在固定 CarSim 工况中可用 PID 圈速优化工具辅助调参；
 - 再推进 DIL 驾驶员在环仿真；
 - 最终转向嵌入式和实车验证。
 
@@ -484,6 +542,7 @@ flowchart TD
 1. 论文调研中比较过哪些控制算法，各自优缺点是什么。
 2. MATLAB/Simulink 联合仿真的具体模型结构。
 3. 当前实车实际具备哪些传感器，以及哪些信号最关键。
-4. DIL 目前做得不好的具体原因，是模型精度、实时性还是接口问题。
-5. MATLAB 转 C 时已经遇到的实际 bug 和对齐问题。
-6. 主程序模式下，DYC/TCS/Launch Control 应该如何统一调度。
+4. PID 优化结果和人工调参结果在不同 CarSim 工况之间是否稳定。
+5. DIL 目前做得不好的具体原因，是模型精度、实时性还是接口问题。
+6. MATLAB 转 C 时已经遇到的实际 bug 和对齐问题。
+7. 主程序模式下，DYC/TCS/Launch Control 应该如何统一调度。
