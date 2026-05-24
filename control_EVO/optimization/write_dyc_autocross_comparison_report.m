@@ -44,7 +44,8 @@ html = [
     "<h2>关键指标</h2>"
     localTableToHtml(summary, summary.Properties.VariableNames)
     localMechanismHtml()
-    localInterventionHtml(summary)
+    localMechanismDeltaHtml(metrics)
+    localInterventionHtml(metrics)
     "<h2>运行证据</h2>"
     localTableToHtml(perRun, {'caseId','repeatIndex','status','lapTime_s','stopReason','failureReason','lastRunLogPath','lastRunEndPath'})
     localBoundaryHtml()
@@ -105,15 +106,31 @@ html = [
 ];
 end
 
-function html = localInterventionHtml(summary)
-mzFields = {'mzRms_Nm','mzPeakAbs_Nm','mzAbsIntegral_Nms','interventionRatio'};
-hasMz = false;
-for idx = 1:numel(mzFields)
-    if any(isfinite(summary.(mzFields{idx})))
-        hasMz = true;
-        break;
-    end
+function html = localMechanismDeltaHtml(metrics)
+if ~isfield(metrics, 'delta') || isempty(metrics.delta)
+    html = "";
+    return;
 end
+
+columns = {'baselineCaseId','testCaseId','status','failureReason', ...
+    'yawRateRmseDelta','yawRateMaeDelta','yawRatePeakErrorDelta', ...
+    'lateralErrorRmseDelta','lateralErrorPeakDelta','ayPeakAbsDelta','ayRmsDelta', ...
+    'ayStdDelta','meanSpeedDelta_mps','minSpeedDelta_mps','speedStdDelta_mps', ...
+    'mzRmsDelta_Nm','mzPeakAbsDelta_Nm','mzAbsIntegralDelta_Nms','interventionRatioDelta'};
+html = [
+    "<h2>机理指标差值</h2>"
+    "<section class=""card"">"
+    "<p>下表按 dyc_on - dyc_off 计算横摆跟踪、路径偏差、速度保持和控制介入指标差值。负的误差差值通常表示 DYC 开启后误差降低，正的速度差值表示速度指标提高。</p>"
+    localTableToHtml(metrics.delta, columns)
+    "</section>"
+];
+end
+
+function html = localInterventionHtml(metrics)
+summary = metrics.summary;
+mzFields = {'mzRms_Nm','mzPeakAbs_Nm','mzAbsIntegral_Nms','interventionRatio'};
+dycOnSummary = localCaseSummaryRow(summary, "dyc_on");
+hasMz = height(dycOnSummary) == 1 && localHasFiniteMetric(dycOnSummary, mzFields);
 
 html = [
     "<h2>控制介入</h2>"
@@ -131,10 +148,19 @@ end
 
 html = [
     html
-    "<p>下表列出横摆力矩 RMS、峰值、绝对积分和介入占比。数值越高通常表示 DYC 对车辆横摆运动施加了更强或更频繁的修正，但仍需结合 yaw tracking、路径偏差和圈速变化共同判断。</p>"
-    localTableToHtml(summary, [{'caseId','displayName'}, mzFields])
-    "</section>"
+    "<p>下表列出 dyc_on 的横摆力矩 RMS、峰值、绝对积分和介入占比。数值越高通常表示 DYC 对车辆横摆运动施加了更强或更频繁的修正，但仍需结合 yaw tracking、路径偏差和圈速变化共同判断。</p>"
+    localTableToHtml(dycOnSummary, [{'caseId','displayName'}, mzFields])
 ];
+
+if isfield(metrics, 'delta') && ~isempty(metrics.delta)
+    html = [
+        html
+        "<p>相对 dyc_off 的控制介入差值如下，按 dyc_on - dyc_off 计算。</p>"
+        localTableToHtml(metrics.delta, {'mzRmsDelta_Nm','mzPeakAbsDelta_Nm','mzAbsIntegralDelta_Nms','interventionRatioDelta'})
+    ];
+end
+
+html = [html; "</section>"];
 end
 
 function html = localBoundaryHtml()
@@ -165,11 +191,25 @@ html = html + "</tbody></table>";
 end
 
 function value = localSummaryValue(summary, caseId, fieldName)
-row = summary(summary.caseId == string(caseId), :);
+row = localCaseSummaryRow(summary, caseId);
 if height(row) ~= 1 || ~ismember(fieldName, summary.Properties.VariableNames)
     value = NaN;
 else
     value = row.(fieldName);
+end
+end
+
+function row = localCaseSummaryRow(summary, caseId)
+row = summary(summary.caseId == string(caseId), :);
+end
+
+function tf = localHasFiniteMetric(row, fields)
+tf = false;
+for idx = 1:numel(fields)
+    if ismember(fields{idx}, row.Properties.VariableNames) && any(isfinite(row.(fields{idx})))
+        tf = true;
+        return;
+    end
 end
 end
 

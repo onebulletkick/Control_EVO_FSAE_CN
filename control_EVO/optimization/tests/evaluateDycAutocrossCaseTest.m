@@ -116,6 +116,39 @@ classdef evaluateDycAutocrossCaseTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(results.failureReason, "did not refresh"));
         end
 
+        function testMissingLastRunEndAfterSimulationIsHardFailure(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            [simfilePath, ~] = localWriteFixtureSimfile(fixture.Folder);
+            overrides = localBaseOverrides(fixture.Folder, simfilePath, ...
+                @(cfg, ~, ~) localWriteFreshLogWithoutEnd(cfg, 83.25), true);
+            cfg = dyc_autocross_comparison_config(overrides);
+
+            results = evaluate_dyc_autocross_case(cfg.cases(2), cfg);
+
+            testCase.verifyEqual(results.status, "invalid");
+            testCase.verifyEqual(results.objective, cfg.penalty.hardFailureObjective);
+            testCase.verifyEqual(results.penalty, cfg.penalty.hardFailureObjective);
+            testCase.verifyTrue(contains(results.failureReason, "LastRun_end.par"));
+            testCase.verifyTrue(contains(results.failureReason, "not found"));
+        end
+
+        function testRequiredStopReasonMismatchIsHardFailure(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            [simfilePath, ~] = localWriteFixtureSimfile(fixture.Folder);
+            overrides = localBaseOverrides(fixture.Folder, simfilePath, ...
+                @(cfg, ~, ~) localFakeExternalControlStopSimulation(cfg, 83.25), true);
+            cfg = dyc_autocross_comparison_config(overrides);
+
+            results = evaluate_dyc_autocross_case(cfg.cases(2), cfg);
+
+            testCase.verifyEqual(results.status, "invalid");
+            testCase.verifyTrue(isnan(results.lapTime_s));
+            testCase.verifyEqual(results.objective, cfg.penalty.hardFailureObjective);
+            testCase.verifyEqual(results.penalty, cfg.penalty.hardFailureObjective);
+            testCase.verifyTrue(contains(results.failureReason, cfg.metric.requiredStopReason));
+            testCase.verifyTrue(contains(results.failureReason, "External control"));
+        end
+
         function testStructSignalsWithoutStandardDataAreUnavailable(testCase)
             fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
             [simfilePath, ~] = localWriteFixtureSimfile(fixture.Folder);
@@ -194,6 +227,29 @@ writelines([
     "Run started: VS output file = fresh.vsb"
     "Run stopped at t = " + string(lapTime) + ". VS Command STOP_RUN_NOW End event triggered"
 ], info.logFile);
+signals = struct();
+signals.speed_mps = [1 2 3];
+simOut = struct('signals', signals);
+end
+
+function simOut = localWriteFreshLogWithoutEnd(cfg, lapTime)
+info = parse_dyc_simfile(cfg.simfilePath);
+writelines([
+    "Run started: VS output file = missing_end.vsb"
+    "Run stopped at t = " + string(lapTime) + ". VS Command STOP_RUN_NOW End event triggered"
+], info.logFile);
+signals = struct();
+signals.speed_mps = [1 2 3];
+simOut = struct('signals', signals);
+end
+
+function simOut = localFakeExternalControlStopSimulation(cfg, lapTime)
+info = parse_dyc_simfile(cfg.simfilePath);
+writelines([
+    "Run started: VS output file = external_stop.vsb"
+    "Run stopped at t = " + string(lapTime) + ". External control (manual or external model)"
+], info.logFile);
+writelines("SV_STATION 1234.5 ; m ! Station", info.endFile);
 signals = struct();
 signals.speed_mps = [1 2 3];
 simOut = struct('signals', signals);

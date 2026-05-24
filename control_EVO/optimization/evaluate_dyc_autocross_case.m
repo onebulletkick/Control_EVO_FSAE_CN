@@ -32,6 +32,13 @@ for repeatIndex = 1:repeatCount
 
         afterLogEvidence = localFileEvidence(simfileInfo.logFile);
         afterEndEvidence = localFileEvidence(simfileInfo.endFile);
+        if localShouldRequireExistingEndFile(cfg, afterEndEvidence)
+            result = localHardFailure(result, cfg, ...
+                "LastRun_end.par not found after simulation; refusing to score without CarSim end evidence");
+            result.elapsedWallTime_s = toc(ticStart);
+            results(repeatIndex) = result;
+            continue;
+        end
         if localShouldRejectStaleFile(cfg, beforeLogEvidence, afterLogEvidence)
             result = localHardFailure(result, cfg, ...
                 "LastRun_log.txt did not refresh after simulation; refusing to score stale CarSim log");
@@ -48,6 +55,7 @@ for repeatIndex = 1:repeatCount
         end
 
         metric = extract_dyc_laptime_metric(simfileInfo.logFile, simfileInfo.endFile, cfg);
+        metric = localEnforceRequiredStopReason(metric, cfg);
         result.lapTime_s = metric.lapTime_s;
         result.finishStation_m = metric.finishStation_m;
         result.svStation_m = metric.svStation_m;
@@ -122,6 +130,29 @@ result.penalty = cfg.penalty.hardFailureObjective;
 result.failureReason = failureReason;
 end
 
+function metric = localEnforceRequiredStopReason(metric, cfg)
+if ~isfield(cfg, 'metric') || ~isfield(cfg.metric, 'requiredStopReason')
+    return;
+end
+
+requiredStopReason = string(cfg.metric.requiredStopReason);
+if strlength(requiredStopReason) == 0 || string(metric.status) ~= "valid"
+    return;
+end
+
+actualStopReason = string(metric.stopReason);
+if actualStopReason == requiredStopReason
+    return;
+end
+
+metric.status = "invalid";
+metric.lapTime_s = NaN;
+metric.objective = cfg.penalty.hardFailureObjective;
+metric.penalty = cfg.penalty.hardFailureObjective;
+metric.failureReason = "required stop reason '" + requiredStopReason + ...
+    "' but actual stop reason was '" + actualStopReason + "'";
+end
+
 function simOut = localRunSimulation(caseDef, cfg)
 oldFolder = pwd;
 cleanup = onCleanup(@() cd(oldFolder));
@@ -153,6 +184,15 @@ end
 tf = beforeEvidence.lastModifiedMs == afterEvidence.lastModifiedMs && ...
     beforeEvidence.sizeBytes == afterEvidence.sizeBytes && ...
     beforeEvidence.contentSignature == afterEvidence.contentSignature;
+end
+
+function tf = localShouldRequireExistingEndFile(cfg, afterEvidence)
+tf = false;
+if ~isfield(cfg.simulation, 'verifyLastRunTimestamp') || ~cfg.simulation.verifyLastRunTimestamp
+    return;
+end
+
+tf = ~afterEvidence.exists;
 end
 
 function evidence = localFileEvidence(filePath)

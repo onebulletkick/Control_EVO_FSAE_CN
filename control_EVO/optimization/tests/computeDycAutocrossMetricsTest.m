@@ -24,6 +24,32 @@ classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
             testCase.verifyEqual(result.comparison.lapTimeDelta_s, -2.0, 'AbsTol', 1e-12);
             testCase.verifyEqual(result.comparison.lapTimeDelta_pct, -100 * 2 / 62, 'AbsTol', 1e-10);
 
+            expectedDeltaColumns = {'baselineCaseId','testCaseId','status','failureReason', ...
+                'lapTimeDelta_s','lapTimeDelta_pct','yawRateRmseDelta','yawRateMaeDelta', ...
+                'yawRatePeakErrorDelta','lateralErrorRmseDelta','lateralErrorPeakDelta', ...
+                'ayPeakAbsDelta','ayRmsDelta','ayStdDelta','meanSpeedDelta_mps', ...
+                'minSpeedDelta_mps','speedStdDelta_mps','mzRmsDelta_Nm','mzPeakAbsDelta_Nm', ...
+                'mzAbsIntegralDelta_Nms','interventionRatioDelta'};
+            testCase.verifyEqual(height(result.delta), 1);
+            testCase.verifyTrue(all(ismember(expectedDeltaColumns, result.delta.Properties.VariableNames)));
+            delta = result.delta(1, :);
+            testCase.verifyEqual(delta.baselineCaseId, "dyc_off");
+            testCase.verifyEqual(delta.testCaseId, "dyc_on");
+            testCase.verifyEqual(delta.status, "valid");
+            testCase.verifyEqual(delta.failureReason, "");
+            testCase.verifyLessThan(delta.yawRateRmseDelta, 0);
+            testCase.verifyLessThan(delta.yawRateMaeDelta, 0);
+            testCase.verifyLessThan(delta.lateralErrorRmseDelta, 0);
+            testCase.verifyLessThan(delta.lateralErrorPeakDelta, 0);
+            testCase.verifyGreaterThan(delta.meanSpeedDelta_mps, 0);
+            testCase.verifyGreaterThan(delta.minSpeedDelta_mps, 0);
+            testCase.verifyGreaterThan(delta.mzRmsDelta_Nm, 0);
+            testCase.verifyGreaterThan(delta.mzPeakAbsDelta_Nm, 0);
+            testCase.verifyGreaterThan(delta.mzAbsIntegralDelta_Nms, 0);
+            testCase.verifyGreaterThan(delta.interventionRatioDelta, 0);
+            testCase.verifyEqual(result.comparison.lapTimeDelta_s, delta.lapTimeDelta_s, 'AbsTol', 1e-12);
+            testCase.verifyEqual(result.comparison.lapTimeDelta_pct, delta.lapTimeDelta_pct, 'AbsTol', 1e-10);
+
             offSummary = result.summary(result.summary.caseId == "dyc_off", :);
             onSummary = result.summary(result.summary.caseId == "dyc_on", :);
             testCase.verifyLessThan(onSummary.yawRateRmse, offSummary.yawRateRmse);
@@ -102,6 +128,9 @@ classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(result.comparison.failureReason, "lap time"));
             testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_s));
             testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_pct));
+            testCase.verifyEqual(result.delta.status, "invalid");
+            testCase.verifyTrue(isnan(result.delta.yawRateRmseDelta));
+            testCase.verifyTrue(isnan(result.delta.mzAbsIntegralDelta_Nms));
         end
 
         function testComparisonInvalidWhenBaselineLapTimeIsZero(testCase)
@@ -117,6 +146,9 @@ classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(result.comparison.failureReason, "baseline"));
             testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_s));
             testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_pct));
+            testCase.verifyEqual(result.delta.status, "invalid");
+            testCase.verifyTrue(isnan(result.delta.lapTimeDelta_s));
+            testCase.verifyTrue(isnan(result.delta.interventionRatioDelta));
         end
     end
 end

@@ -31,6 +31,9 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(html, 'DYC Autocross 有无控制对比报告'));
             testCase.verifyTrue(contains(html, '圈速差值'));
             testCase.verifyTrue(contains(html, '机理解释'));
+            testCase.verifyTrue(contains(html, '机理指标差值'));
+            testCase.verifyTrue(contains(html, 'yawRateRmseDelta'));
+            testCase.verifyTrue(contains(html, 'interventionRatioDelta'));
             testCase.verifyTrue(contains(html, '控制介入'));
             testCase.verifyTrue(contains(html, '运行证据'));
             testCase.verifyTrue(contains(html, '验证边界'));
@@ -84,6 +87,23 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
 
             html = fileread(fullfile(cfg.resultsDir, 'report.html'));
             testCase.verifyTrue(contains(html, '不输出 DYC 有效性结论'));
+        end
+
+        function testControlInterventionAvailabilityUsesDycOnOnly(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            cfg = localConfig(fixture.Folder);
+            offRun = localRun("dyc_off", "DYC 关闭", 1, 62.0, ...
+                localSignals([0 1], [0.2 0.1], [0 0], [0.2 0.1], [0 0], [1 2], [10 11], [80 100]));
+            onRun = localRun("dyc_on", "当前 PID DYC", 1, 60.0, ...
+                localSignals([0 1], [0.1 0.05], [0 0], [0.1 0.05], [0 0], [1 1], [12 13], [NaN NaN]));
+            runResults = [offRun onRun];
+            metrics = compute_dyc_autocross_metrics(runResults, cfg);
+
+            write_dyc_autocross_comparison_report(cfg, runResults, metrics);
+
+            html = fileread(fullfile(cfg.resultsDir, 'report.html'));
+            testCase.verifyTrue(contains(html, '控制介入信号不可用'));
+            testCase.verifyFalse(contains(html, '下表列出 dyc_on 的横摆力矩'));
         end
     end
 end
