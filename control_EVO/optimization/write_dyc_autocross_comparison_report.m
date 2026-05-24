@@ -1,4 +1,4 @@
-function write_dyc_autocross_comparison_report(cfg, runResults, metrics)
+function cfg = write_dyc_autocross_comparison_report(cfg, runResults, metrics)
 %WRITE_DYC_AUTOCROSS_COMPARISON_REPORT 输出 Autocross DYC 开关对比报告产物。
 
 cfg.reportPath = localPathUnderResultsDir(cfg, 'reportPath', 'report.html');
