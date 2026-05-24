@@ -67,6 +67,8 @@ end
 specs = [
     struct('kind', 'speed', 'fileName', 'speed_comparison.png', ...
         'title', '速度对比', 'yLabel', 'speed (m/s)')
+    struct('kind', 'yaw_rate', 'fileName', 'yaw_rate_comparison.png', ...
+        'title', '横摆角速度对比', 'yLabel', 'yaw-rate (rad/s)')
     struct('kind', 'yaw_error', 'fileName', 'yaw_error_comparison.png', ...
         'title', '横摆误差对比', 'yLabel', 'yaw-rate error (rad/s)')
     struct('kind', 'lateral_error', 'fileName', 'lateral_error_comparison.png', ...
@@ -140,7 +142,7 @@ end
 function [time, value] = localSeriesForCase(runResults, caseId, kind)
 time = [];
 value = [];
-run = localFirstValidRun(runResults, caseId);
+run = localFirstSignalRun(runResults, caseId);
 if isempty(run) || ~isfield(run, 'signals') || ~isstruct(run.signals)
     return;
 end
@@ -149,6 +151,8 @@ signals = run.signals;
 switch string(kind)
     case "speed"
         value = localVectorField(signals, 'speed_mps');
+    case "yaw_rate"
+        value = localVectorField(signals, 'yawRate_radps');
     case "yaw_error"
         value = localErrorVector(signals, 'yawRate_radps', 'yawRateTarget_radps');
     case "lateral_error"
@@ -169,12 +173,37 @@ else
 end
 end
 
-function run = localFirstValidRun(runResults, caseId)
+function run = localFirstSignalRun(runResults, caseId)
 run = [];
+fallbackRun = [];
 for idx = 1:numel(runResults)
-    if string(localStructField(runResults(idx), 'caseId')) == string(caseId) && ...
-            string(localStructField(runResults(idx), 'status')) == "valid"
+    if string(localStructField(runResults(idx), 'caseId')) ~= string(caseId)
+        continue;
+    end
+    if ~localRunHasSignalData(runResults(idx))
+        continue;
+    end
+    if string(localStructField(runResults(idx), 'status')) == "valid"
         run = runResults(idx);
+        return;
+    end
+    if isempty(fallbackRun)
+        fallbackRun = runResults(idx);
+    end
+end
+run = fallbackRun;
+end
+
+function tf = localRunHasSignalData(run)
+tf = false;
+if ~isstruct(run) || ~isfield(run, 'signals') || ~isstruct(run.signals)
+    return;
+end
+fields = {'time_s','speed_mps','yawRate_radps','yawRateTarget_radps', ...
+    'latVeh_m','latTarget_m','ay_mps2','mz_Nm'};
+for idx = 1:numel(fields)
+    if isfield(run.signals, fields{idx}) && ~isempty(run.signals.(fields{idx}))
+        tf = true;
         return;
     end
 end

@@ -36,6 +36,7 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(html, 'interventionRatioDelta'));
             testCase.verifyTrue(contains(html, '数据分析图'));
             testCase.verifyTrue(contains(html, '速度对比'));
+            testCase.verifyTrue(contains(html, '横摆角速度对比'));
             testCase.verifyTrue(contains(html, '横摆误差对比'));
             testCase.verifyTrue(contains(html, '路径误差对比'));
             testCase.verifyTrue(contains(html, '横摆力矩对比'));
@@ -49,6 +50,7 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyEqual(height(comparisonMetrics), 2);
             testCase.verifyEqual(height(perRun), 2);
             testCase.verifyPlotFile(cfg.resultsDir, 'speed_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'yaw_rate_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_error_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'lateral_error_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_moment_comparison.png');
@@ -97,6 +99,29 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
 
             html = fileread(fullfile(cfg.resultsDir, 'report.html'));
             testCase.verifyTrue(contains(html, '不输出 DYC 有效性结论'));
+        end
+
+        function testReportPlotsSignalDataFromInvalidRuns(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            cfg = localConfig(fixture.Folder);
+            offRun = localRun("dyc_off", "DYC 关闭", 1, NaN, ...
+                localSignals([0 1], [0.2 0.1], [0 0], [0.2 0.1], [0 0], [1 2], [10 11], [0 0]));
+            onRun = localRun("dyc_on", "当前 PID DYC", 1, NaN, ...
+                localSignals([0 1], [0.1 0.05], [0 0], [0.1 0.05], [0 0], [1 1], [12 13], [0 100]));
+            offRun.status = "invalid";
+            onRun.status = "invalid";
+            offRun.failureReason = "测试无效圈";
+            onRun.failureReason = "测试无效圈";
+            runResults = [offRun onRun];
+            metrics = compute_dyc_autocross_metrics(runResults, cfg);
+
+            write_dyc_autocross_comparison_report(cfg, runResults, metrics);
+
+            testCase.verifyPlotFile(cfg.resultsDir, 'speed_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'yaw_rate_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'yaw_error_comparison.png');
+            html = fileread(cfg.reportPath);
+            testCase.verifyTrue(contains(html, 'plots/speed_comparison.png'));
         end
 
         function testControlInterventionAvailabilityUsesDycOnOnly(testCase)

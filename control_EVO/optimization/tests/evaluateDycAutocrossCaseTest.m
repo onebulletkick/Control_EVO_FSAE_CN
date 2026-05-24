@@ -98,6 +98,28 @@ classdef evaluateDycAutocrossCaseTest < matlab.unittest.TestCase
             testCase.verifyEqual(signals.yawRate_radps, [0.1 0.2 0.3], 'AbsTol', 1e-12);
         end
 
+        function testCollectSignalsFallsBackToCarSimVsb(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            [simfilePath, resultsDir] = localWriteFixtureSimfile(fixture.Folder);
+            localWriteFixtureCarSimVsb(resultsDir);
+            simfileInfo = parse_dyc_simfile(simfilePath);
+            cfg = dyc_autocross_comparison_config(struct('simfilePath', simfilePath, ...
+                'resultsDir', fixture.Folder, 'testMode', true));
+            simOut = Simulink.SimulationOutput;
+
+            signals = collect_dyc_autocross_signals(simOut, simfileInfo, cfg);
+
+            testCase.verifyTrue(signals.available);
+            testCase.verifyEqual(signals.source, "CarSimVSB");
+            testCase.verifyEqual(signals.time_s, [0 0.5], 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.speed_mps, [10 20], 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.yawRate_radps, deg2rad([5 10]), 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.latVeh_m, [1.0 1.5], 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.latTarget_m, [0.8 1.0], 'AbsTol', 1e-7);
+            testCase.verifyEqual(signals.ay_mps2, [0.1 0.2] * 9.80665, 'AbsTol', 1e-7);
+            testCase.verifyEqual(signals.mz_Nm, [92.6923076923077 185.384615384615], 'AbsTol', 1e-10);
+        end
+
         function testRefusesMixedFreshLogAndStaleEndFile(testCase)
             fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
             [simfilePath, resultsDir] = localWriteFixtureSimfile(fixture.Folder);
@@ -219,6 +241,39 @@ logsout = logsout.addElement(timeseries([12 14 15]', time), 'Vx');
 logsout = logsout.addElement(timeseries([0.1 0.2 0.3]', time), 'AVz');
 simOut = Simulink.SimulationOutput;
 simOut.logsout = logsout;
+end
+
+function localWriteFixtureCarSimVsb(resultsDir)
+vsPath = fullfile(resultsDir, 'LastRun.vs');
+vsbPath = fullfile(resultsDir, 'LastRun.vsb');
+writelines([
+    "{"
+    "  ""VsChannelGroup"" : {"
+    "    ""XStart"" : 0,"
+    "    ""XStep"" : 0.5,"
+    "    ""Channels"" : ["
+    "      { ""Name Aliases"" : [ ""AVz"" ], ""Units"" : ""deg/s"" },"
+    "      { ""Name Aliases"" : [ ""Ay"" ], ""Units"" : ""g"" },"
+    "      { ""Name Aliases"" : [ ""My_Dr_L1"" ], ""Units"" : ""N-m"" },"
+    "      { ""Name Aliases"" : [ ""My_Dr_L2"" ], ""Units"" : ""N-m"" },"
+    "      { ""Name Aliases"" : [ ""My_Dr_R1"" ], ""Units"" : ""N-m"" },"
+    "      { ""Name Aliases"" : [ ""My_Dr_R2"" ], ""Units"" : ""N-m"" },"
+    "      { ""Name Aliases"" : [ ""Vx"" ], ""Units"" : ""km/h"" },"
+    "      { ""Name Aliases"" : [ ""Yo"" ], ""Units"" : ""m"" },"
+    "      { ""Name Aliases"" : [ ""Y_Target"" ], ""Units"" : ""m"" }"
+    "    ]"
+    "  }"
+    "}"
+], vsPath);
+
+data = [
+    5 0.1 10 20 30 40 36 1.0 0.8
+    10 0.2 20 40 60 80 72 1.5 1.0
+];
+fid = fopen(vsbPath, 'wb');
+cleanup = onCleanup(@() fclose(fid));
+fwrite(fid, zeros(1, 24, 'uint8'), 'uint8');
+fwrite(fid, data.', 'single');
 end
 
 function simOut = localRefreshLogOnly(cfg, lapTime)
