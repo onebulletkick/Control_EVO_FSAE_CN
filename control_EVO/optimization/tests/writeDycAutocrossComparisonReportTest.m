@@ -34,6 +34,12 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(html, '机理指标差值'));
             testCase.verifyTrue(contains(html, 'yawRateRmseDelta'));
             testCase.verifyTrue(contains(html, 'interventionRatioDelta'));
+            testCase.verifyTrue(contains(html, '数据分析图'));
+            testCase.verifyTrue(contains(html, '速度对比'));
+            testCase.verifyTrue(contains(html, '横摆误差对比'));
+            testCase.verifyTrue(contains(html, '路径误差对比'));
+            testCase.verifyTrue(contains(html, '横摆力矩对比'));
+            testCase.verifyTrue(contains(html, 'plots/speed_comparison.png'));
             testCase.verifyTrue(contains(html, '控制介入'));
             testCase.verifyTrue(contains(html, '运行证据'));
             testCase.verifyTrue(contains(html, '验证边界'));
@@ -42,6 +48,10 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             perRun = readtable(runResultsPath, 'TextType', 'string');
             testCase.verifyEqual(height(comparisonMetrics), 2);
             testCase.verifyEqual(height(perRun), 2);
+            testCase.verifyPlotFile(cfg.resultsDir, 'speed_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'yaw_error_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'lateral_error_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'yaw_moment_comparison.png');
         end
 
         function testReportRejectsEscapedArtifactPath(testCase)
@@ -104,6 +114,18 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             html = fileread(fullfile(cfg.resultsDir, 'report.html'));
             testCase.verifyTrue(contains(html, '控制介入信号不可用'));
             testCase.verifyFalse(contains(html, '下表列出 dyc_on 的横摆力矩'));
+        end
+    end
+
+    methods
+        function verifyPlotFile(testCase, resultsDir, fileName)
+            plotPath = fullfile(resultsDir, 'plots', fileName);
+            hasFile = isfile(plotPath);
+            testCase.verifyTrue(hasFile, "Missing plot file: " + string(plotPath));
+            if hasFile
+                fileInfo = dir(plotPath);
+                testCase.verifyGreaterThan(fileInfo.bytes, 0, "Empty plot file: " + string(plotPath));
+            end
         end
     end
 end

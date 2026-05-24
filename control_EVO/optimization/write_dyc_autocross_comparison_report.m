@@ -13,13 +13,14 @@ end
 writetable(metrics.summary, cfg.comparisonMetricsPath);
 writetable(metrics.perRun, cfg.runResultsPath);
 save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics');
-localWriteHtmlReport(cfg, metrics);
+localWriteHtmlReport(cfg, runResults, metrics);
 end
 
-function localWriteHtmlReport(cfg, metrics)
+function localWriteHtmlReport(cfg, runResults, metrics)
 comparison = metrics.comparison;
 summary = metrics.summary;
 perRun = metrics.perRun;
+plotItems = localCreateAnalysisPlots(cfg, runResults);
 
 html = [
     "<!doctype html>"
@@ -34,6 +35,7 @@ html = [
     ".card{background:#fff;border:1px solid #d8dee8;border-radius:8px;padding:18px 20px;margin:16px 0;box-shadow:0 1px 2px rgba(15,23,42,.05);}"
     ".grid{display:grid;grid-template-columns:180px 1fr;gap:8px 16px;}.label{font-weight:600;color:#52606d;}"
     "table{width:100%;border-collapse:collapse;background:#fff;font-size:14px;}th,td{border:1px solid #d8dee8;padding:8px 10px;text-align:left;vertical-align:top;}th{background:#e8edf3;}"
+    "figure{margin:16px 0;padding:12px;background:#fff;border:1px solid #d8dee8;border-radius:8px;}figcaption{font-weight:600;margin-bottom:8px;}img{max-width:100%;height:auto;border:1px solid #e5e7eb;background:#fff;}"
     ".muted{color:#66788a;}.ok{color:#0f766e;font-weight:600;}.warn{color:#b45309;font-weight:600;}"
     "</style>"
     "</head>"
@@ -45,6 +47,7 @@ html = [
     localTableToHtml(summary, summary.Properties.VariableNames)
     localMechanismHtml()
     localMechanismDeltaHtml(metrics)
+    localPlotSectionHtml(plotItems)
     localInterventionHtml(metrics)
     "<h2>运行证据</h2>"
     localTableToHtml(perRun, {'caseId','repeatIndex','status','lapTime_s','stopReason','failureReason','lastRunLogPath','lastRunEndPath'})
@@ -53,6 +56,159 @@ html = [
 ];
 
 localWriteTextFile(cfg.reportPath, html);
+end
+
+function plotItems = localCreateAnalysisPlots(cfg, runResults)
+plotDir = fullfile(cfg.resultsDir, 'plots');
+if ~isfolder(plotDir)
+    mkdir(plotDir);
+end
+
+specs = [
+    struct('kind', 'speed', 'fileName', 'speed_comparison.png', ...
+        'title', '速度对比', 'yLabel', 'speed (m/s)')
+    struct('kind', 'yaw_error', 'fileName', 'yaw_error_comparison.png', ...
+        'title', '横摆误差对比', 'yLabel', 'yaw-rate error (rad/s)')
+    struct('kind', 'lateral_error', 'fileName', 'lateral_error_comparison.png', ...
+        'title', '路径误差对比', 'yLabel', 'lateral error (m)')
+    struct('kind', 'yaw_moment', 'fileName', 'yaw_moment_comparison.png', ...
+        'title', '横摆力矩对比', 'yLabel', 'Mz (Nm)')
+];
+
+plotItems = repmat(struct('title', "", 'relativePath', "", 'path', "", 'available', false, 'failureReason', ""), 0, 1);
+for idx = 1:numel(specs)
+    spec = specs(idx);
+    plotPath = fullfile(plotDir, spec.fileName);
+    [isAvailable, failureReason] = localWriteAnalysisPlot(plotPath, spec, runResults);
+    if isAvailable
+        item = struct();
+        item.title = string(spec.title);
+        item.relativePath = "plots/" + string(spec.fileName);
+        item.path = string(plotPath);
+        item.available = true;
+        item.failureReason = "";
+        plotItems(end+1, 1) = item; %#ok<AGROW>
+    else
+        item = struct();
+        item.title = string(spec.title);
+        item.relativePath = "";
+        item.path = string(plotPath);
+        item.available = false;
+        item.failureReason = failureReason;
+        plotItems(end+1, 1) = item; %#ok<AGROW>
+    end
+end
+end
+
+function [isAvailable, failureReason] = localWriteAnalysisPlot(plotPath, spec, runResults)
+isAvailable = false;
+failureReason = "";
+
+[offTime, offValue] = localSeriesForCase(runResults, "dyc_off", spec.kind);
+[onTime, onValue] = localSeriesForCase(runResults, "dyc_on", spec.kind);
+if isempty(offValue) && isempty(onValue)
+    failureReason = "dyc_off 和 dyc_on 均缺少 " + string(spec.title) + " 所需信号";
+    return;
+end
+
+fig = figure('Visible', 'off', 'Color', 'w');
+cleanup = onCleanup(@() close(fig));
+hold on;
+if ~isempty(offValue)
+    plot(offTime, offValue, 'LineWidth', 1.4, 'DisplayName', 'dyc_off');
+end
+if ~isempty(onValue)
+    plot(onTime, onValue, 'LineWidth', 1.4, 'DisplayName', 'dyc_on');
+end
+grid on;
+xlabel('time (s)');
+ylabel(spec.yLabel);
+title(spec.title);
+legend('Location', 'best');
+
+try
+    exportgraphics(fig, plotPath, 'Resolution', 150);
+catch
+    saveas(fig, plotPath);
+end
+isAvailable = isfile(plotPath);
+if ~isAvailable
+    failureReason = "图像文件写出失败: " + string(plotPath);
+end
+end
+
+function [time, value] = localSeriesForCase(runResults, caseId, kind)
+time = [];
+value = [];
+run = localFirstValidRun(runResults, caseId);
+if isempty(run) || ~isfield(run, 'signals') || ~isstruct(run.signals)
+    return;
+end
+
+signals = run.signals;
+switch string(kind)
+    case "speed"
+        value = localVectorField(signals, 'speed_mps');
+    case "yaw_error"
+        value = localErrorVector(signals, 'yawRate_radps', 'yawRateTarget_radps');
+    case "lateral_error"
+        value = localErrorVector(signals, 'latVeh_m', 'latTarget_m');
+    case "yaw_moment"
+        value = localVectorField(signals, 'mz_Nm');
+end
+
+if isempty(value)
+    return;
+end
+
+time = localVectorField(signals, 'time_s');
+if numel(time) < numel(value)
+    time = (0:numel(value)-1)';
+else
+    time = time(1:numel(value));
+end
+end
+
+function run = localFirstValidRun(runResults, caseId)
+run = [];
+for idx = 1:numel(runResults)
+    if string(localStructField(runResults(idx), 'caseId')) == string(caseId) && ...
+            string(localStructField(runResults(idx), 'status')) == "valid"
+        run = runResults(idx);
+        return;
+    end
+end
+end
+
+function value = localErrorVector(signals, actualField, targetField)
+actual = localVectorField(signals, actualField);
+target = localVectorField(signals, targetField);
+if isempty(actual) || isempty(target)
+    value = [];
+    return;
+end
+n = min(numel(actual), numel(target));
+value = actual(1:n) - target(1:n);
+end
+
+function value = localVectorField(signals, fieldName)
+value = [];
+if ~isstruct(signals) || ~isfield(signals, fieldName)
+    return;
+end
+value = double(signals.(fieldName));
+value = value(:);
+if isempty(value) || ~any(isfinite(value))
+    value = [];
+end
+end
+
+function value = localStructField(s, fieldName)
+if isstruct(s) && isfield(s, fieldName)
+    value = s.(fieldName);
+else
+    value = "";
+end
 end
 
 function html = localExperimentSummaryHtml(cfg)
@@ -124,6 +280,39 @@ html = [
     localTableToHtml(metrics.delta, columns)
     "</section>"
 ];
+end
+
+function html = localPlotSectionHtml(plotItems)
+html = [
+    "<h2>数据分析图</h2>"
+    "<section class=""card"">"
+];
+
+availableItems = plotItems([plotItems.available]);
+if isempty(availableItems)
+    html = [
+        html
+        "<p>当前运行结果中缺少可用于绘图的时序信号，因此未生成速度、横摆误差、路径误差或横摆力矩曲线。</p>"
+        "</section>"
+    ];
+    return;
+end
+
+html = [
+    html
+    "<p>以下图表由 MATLAB 根据本次 runResults.signals 生成，用于辅助观察 DYC 开启前后的速度保持、横摆跟踪、路径误差和控制介入差异。</p>"
+];
+for idx = 1:numel(availableItems)
+    html = [
+        html
+        "<figure>"
+        "<figcaption>" + localEscape(availableItems(idx).title) + "</figcaption>"
+        "<img src=""" + localEscape(availableItems(idx).relativePath) + """ alt=""" + localEscape(availableItems(idx).title) + """>"
+        "</figure>"
+    ];
+end
+
+html = [html; "</section>"];
 end
 
 function html = localInterventionHtml(metrics)
