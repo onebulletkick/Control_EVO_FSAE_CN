@@ -1,0 +1,156 @@
+classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
+    methods (TestClassSetup)
+        function addOptimizationPath(testCase)
+            testFolder = fileparts(mfilename('fullpath'));
+            optimizationFolder = fileparts(testFolder);
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(optimizationFolder));
+        end
+    end
+
+    methods (Test)
+        function testComputesLapTimeDeltaAndStabilityMetrics(testCase)
+            cfg = dyc_autocross_comparison_config();
+            offRun = localRun("dyc_off", "DYC 关闭", 1, 62.0, localSignals( ...
+                [0 1 2], [0.30 -0.20 0.10], [0 0 0], [0.40 -0.20 0.30], [0 0 0], ...
+                [2.0 -3.0 1.0], [14 15 14], [0 0 0]));
+            onRun = localRun("dyc_on", "当前 PID DYC", 1, 60.0, localSignals( ...
+                [0 1 2], [0.10 -0.05 0.05], [0 0 0], [0.10 -0.05 0.05], [0 0 0], ...
+                [1.5 -2.0 1.0], [16 17 16], [0 80 -120]));
+
+            result = compute_dyc_autocross_metrics([offRun onRun], cfg);
+
+            testCase.verifyEqual(height(result.perRun), 2);
+            testCase.verifyEqual(result.comparison.status, "valid");
+            testCase.verifyEqual(result.comparison.lapTimeDelta_s, -2.0, 'AbsTol', 1e-12);
+            testCase.verifyEqual(result.comparison.lapTimeDelta_pct, -100 * 2 / 62, 'AbsTol', 1e-10);
+
+            offSummary = result.summary(result.summary.caseId == "dyc_off", :);
+            onSummary = result.summary(result.summary.caseId == "dyc_on", :);
+            testCase.verifyLessThan(onSummary.yawRateRmse, offSummary.yawRateRmse);
+            testCase.verifyLessThan(onSummary.lateralErrorRmse, offSummary.lateralErrorRmse);
+            testCase.verifyGreaterThan(onSummary.meanSpeed_mps, offSummary.meanSpeed_mps);
+            testCase.verifyGreaterThan(onSummary.mzRms_Nm, 0);
+            testCase.verifyGreaterThan(onSummary.interventionRatio, 0);
+        end
+
+        function testInvalidRunsAreExcludedFromSummary(testCase)
+            cfg = dyc_autocross_comparison_config();
+            validRun = localRun("dyc_off", "DYC 关闭", 1, 62.0, localSignals( ...
+                [0 1], [0.1 0.2], [0 0], [0.1 0.2], [0 0], [1 2], [10 11], [0 0]));
+            invalidRun = localRun("dyc_off", "DYC 关闭", 2, 40.0, localSignals( ...
+                [0 1], [3 3], [0 0], [2 2], [0 0], [8 8], [20 20], [100 100]));
+            invalidRun.status = "invalid";
+            invalidRun.failureReason = "测试失败运行";
+
+            result = compute_dyc_autocross_metrics([validRun invalidRun], cfg);
+
+            offSummary = result.summary(result.summary.caseId == "dyc_off", :);
+            testCase.verifyEqual(offSummary.validRunCount, 1);
+            testCase.verifyEqual(offSummary.lapTime_s, 62.0, 'AbsTol', 1e-12);
+        end
+
+        function testMissingSignalsProduceNanButKeepLaptime(testCase)
+            cfg = dyc_autocross_comparison_config();
+            run = localRun("dyc_on", "当前 PID DYC", 1, 60.0, struct());
+
+            result = compute_dyc_autocross_metrics(run, cfg);
+
+            onRun = result.perRun(result.perRun.caseId == "dyc_on", :);
+            testCase.verifyEqual(onRun.lapTime_s, 60.0, 'AbsTol', 1e-12);
+            testCase.verifyTrue(isnan(onRun.yawRateRmse));
+            testCase.verifyTrue(isnan(onRun.lateralErrorRmse));
+        end
+
+        function testAggregatesRepeatRunsWithStd(testCase)
+            cfg = dyc_autocross_comparison_config();
+            first = localRun("dyc_on", "当前 PID DYC", 1, 60.0, localSignals( ...
+                [0 1], [0.1 0.1], [0 0], [0.1 0.1], [0 0], [1 1], [10 10], [0 100]));
+            second = localRun("dyc_on", "当前 PID DYC", 2, 62.0, localSignals( ...
+                [0 1], [0.2 0.2], [0 0], [0.2 0.2], [0 0], [2 2], [12 12], [0 100]));
+
+            result = compute_dyc_autocross_metrics([first second], cfg);
+
+            onSummary = result.summary(result.summary.caseId == "dyc_on", :);
+            testCase.verifyEqual(onSummary.validRunCount, 2);
+            testCase.verifyEqual(onSummary.lapTime_s, 61.0, 'AbsTol', 1e-12);
+            testCase.verifyEqual(onSummary.lapTimeStd_s, std([60; 62]), 'AbsTol', 1e-12);
+            testCase.verifyEqual(onSummary.yawRateRmse, 0.15, 'AbsTol', 1e-12);
+        end
+
+        function testNanOnlyMzProducesNanIntegral(testCase)
+            cfg = dyc_autocross_comparison_config();
+            run = localRun("dyc_on", "当前 PID DYC", 1, 60.0, localSignals( ...
+                [0 1 2], [0.1 0.1 0.1], [0 0 0], [0.1 0.1 0.1], [0 0 0], ...
+                [1 1 1], [10 10 10], [NaN NaN NaN]));
+
+            result = compute_dyc_autocross_metrics(run, cfg);
+
+            onRun = result.perRun(result.perRun.caseId == "dyc_on", :);
+            testCase.verifyTrue(isnan(onRun.mzAbsIntegral_Nms));
+        end
+
+        function testComparisonInvalidWhenAggregateLapTimesAreNan(testCase)
+            cfg = dyc_autocross_comparison_config();
+            offRun = localRun("dyc_off", "DYC 关闭", 1, NaN, localSignals( ...
+                [0 1], [0.1 0.1], [0 0], [0.1 0.1], [0 0], [1 1], [10 10], [0 0]));
+            onRun = localRun("dyc_on", "当前 PID DYC", 1, NaN, localSignals( ...
+                [0 1], [0.1 0.1], [0 0], [0.1 0.1], [0 0], [1 1], [10 10], [0 100]));
+
+            result = compute_dyc_autocross_metrics([offRun onRun], cfg);
+
+            testCase.verifyEqual(result.comparison.status, "invalid");
+            testCase.verifyTrue(contains(result.comparison.failureReason, "lap time"));
+            testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_s));
+            testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_pct));
+        end
+
+        function testComparisonInvalidWhenBaselineLapTimeIsZero(testCase)
+            cfg = dyc_autocross_comparison_config();
+            offRun = localRun("dyc_off", "DYC 关闭", 1, 0, localSignals( ...
+                [0 1], [0.1 0.1], [0 0], [0.1 0.1], [0 0], [1 1], [10 10], [0 0]));
+            onRun = localRun("dyc_on", "当前 PID DYC", 1, 60, localSignals( ...
+                [0 1], [0.1 0.1], [0 0], [0.1 0.1], [0 0], [1 1], [10 10], [0 100]));
+
+            result = compute_dyc_autocross_metrics([offRun onRun], cfg);
+
+            testCase.verifyEqual(result.comparison.status, "invalid");
+            testCase.verifyTrue(contains(result.comparison.failureReason, "baseline"));
+            testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_s));
+            testCase.verifyTrue(isnan(result.comparison.lapTimeDelta_pct));
+        end
+    end
+end
+
+function run = localRun(caseId, displayName, repeatIndex, lapTime_s, signals)
+run = struct();
+run.caseId = caseId;
+run.displayName = displayName;
+run.repeatIndex = repeatIndex;
+run.Kp = 6000;
+run.Ki = 200;
+run.Kd = 0;
+run.status = "valid";
+run.lapTime_s = lapTime_s;
+run.finishStation_m = 245;
+run.svStation_m = 1234;
+run.objective = lapTime_s;
+run.penalty = 0;
+run.stopReason = "VS Command STOP_RUN_NOW End event triggered";
+run.failureReason = "";
+run.lastRunLogPath = "E:\example\LastRun_log.txt";
+run.lastRunEndPath = "E:\example\LastRun_end.par";
+run.elapsedWallTime_s = 1.2;
+run.signals = signals;
+end
+
+function signals = localSignals(time_s, yawRate, yawTarget, latVeh, latTarget, ay, speed, mz)
+signals = struct();
+signals.time_s = time_s;
+signals.yawRate_radps = yawRate;
+signals.yawRateTarget_radps = yawTarget;
+signals.latVeh_m = latVeh;
+signals.latTarget_m = latTarget;
+signals.ay_mps2 = ay;
+signals.speed_mps = speed;
+signals.mz_Nm = mz;
+end
