@@ -204,6 +204,14 @@ switch string(fieldName)
         if unitText == "g"
             value = value * 9.80665;
         end
+    case "ax_mps2"
+        if unitText == "g"
+            value = value * 9.80665;
+        end
+    case "steerSW_rad"
+        if any(unitText == ["deg", "degree", "degrees"])
+            value = deg2rad(value);
+        end
 end
 end
 
@@ -263,7 +271,27 @@ signals.yawRateTarget_radps = [];
 signals.latVeh_m = [];
 signals.latTarget_m = [];
 signals.ay_mps2 = [];
+signals.ax_mps2 = [];
 signals.mz_Nm = [];
+signals.station_m = [];
+signals.throttle = [];
+signals.steerSW_rad = [];
+signals.myDrL1_Nm = [];
+signals.myDrL2_Nm = [];
+signals.myDrR1_Nm = [];
+signals.myDrR2_Nm = [];
+signals.tireFxL1_N = [];
+signals.tireFxL2_N = [];
+signals.tireFxR1_N = [];
+signals.tireFxR2_N = [];
+signals.tireFyL1_N = [];
+signals.tireFyL2_N = [];
+signals.tireFyR1_N = [];
+signals.tireFyR2_N = [];
+signals.tireFzL1_N = [];
+signals.tireFzL2_N = [];
+signals.tireFzR1_N = [];
+signals.tireFzR2_N = [];
 signals.lastRunLogPath = "";
 signals.lastRunEndPath = "";
 
@@ -443,18 +471,39 @@ end
 
 function fields = localStandardSignalFields()
 fields = {'time_s','speed_mps','yawRate_radps','yawRateTarget_radps', ...
-    'latVeh_m','latTarget_m','ay_mps2','mz_Nm'};
+    'latVeh_m','latTarget_m','ay_mps2','ax_mps2','mz_Nm', ...
+    'station_m','throttle','steerSW_rad'};
 end
 
 function fields = localTargetFields()
 fields = {
     'time_s', {'time_s', 'Time'};
+    'station_m', {'station_m', 'Station'};
     'speed_mps', {'speed_mps', 'Vx', 'Vxz_Fwd'};
     'yawRate_radps', {'yawRate_radps', 'AVz', 'YawRate'};
     'yawRateTarget_radps', {'yawRateTarget_radps', 'YawRateTarget', 'AVzTarget'};
     'latVeh_m', {'latVeh_m', 'Lat_Veh', 'Yo'};
     'latTarget_m', {'latTarget_m', 'Lat_Targ', 'Y_Target'};
     'ay_mps2', {'ay_mps2', 'Ay'};
+    'ax_mps2', {'ax_mps2', 'Ax'};
+    'throttle', {'throttle', 'Throttle', 'Thrtl_SC', 'Thr_Eng'};
+    'steerSW_rad', {'steerSW_rad', 'Steer_SW'};
     'mz_Nm', {'mz_Nm', 'Mz_selected', 'Mz'};
+    'myDrL1_Nm', {'myDrL1_Nm', 'My_Dr_L1'};
+    'myDrL2_Nm', {'myDrL2_Nm', 'My_Dr_L2'};
+    'myDrR1_Nm', {'myDrR1_Nm', 'My_Dr_R1'};
+    'myDrR2_Nm', {'myDrR2_Nm', 'My_Dr_R2'};
+    'tireFxL1_N', {'tireFxL1_N', 'Fx_L1'};
+    'tireFxL2_N', {'tireFxL2_N', 'Fx_L2'};
+    'tireFxR1_N', {'tireFxR1_N', 'Fx_R1'};
+    'tireFxR2_N', {'tireFxR2_N', 'Fx_R2'};
+    'tireFyL1_N', {'tireFyL1_N', 'Fy_L1'};
+    'tireFyL2_N', {'tireFyL2_N', 'Fy_L2'};
+    'tireFyR1_N', {'tireFyR1_N', 'Fy_R1'};
+    'tireFyR2_N', {'tireFyR2_N', 'Fy_R2'};
+    'tireFzL1_N', {'tireFzL1_N', 'Fz_L1'};
+    'tireFzL2_N', {'tireFzL2_N', 'Fz_L2'};
+    'tireFzR1_N', {'tireFzR1_N', 'Fz_R1'};
+    'tireFzR2_N', {'tireFzR2_N', 'Fz_R2'};
     };
 end

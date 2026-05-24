@@ -151,10 +151,25 @@ metrics.ayPeakAbs = localPeakAbs(ay);
 metrics.ayRms = localRms(ay);
 metrics.ayStd = localStdIfEnough(ay);
 
+ax = localVectorSignal(signals, 'ax_mps2');
+metrics.axPeakAbs = localPeakAbs(ax);
+metrics.axRms = localRms(ax);
+
 speed = localVectorSignal(signals, 'speed_mps');
 metrics.meanSpeed_mps = localMeanOmitNaN(speed);
 metrics.minSpeed_mps = localMinOmitNaN(speed);
 metrics.speedStd_mps = localStdIfEnough(speed);
+
+station = localVectorSignal(signals, 'station_m');
+metrics.stationEnd_m = localLastOmitNaN(station);
+
+throttle = localVectorSignal(signals, 'throttle');
+metrics.throttleMean = localMeanOmitNaN(throttle);
+metrics.throttlePeak = localPeakAbs(throttle);
+
+steer = localVectorSignal(signals, 'steerSW_rad');
+metrics.steerRms_rad = localRms(steer);
+metrics.steerPeakAbs_rad = localPeakAbs(steer);
 
 mz = localVectorSignal(signals, 'mz_Nm');
 time = localVectorSignal(signals, 'time_s');
@@ -162,6 +177,14 @@ metrics.mzRms_Nm = localRms(mz);
 metrics.mzPeakAbs_Nm = localPeakAbs(mz);
 metrics.mzAbsIntegral_Nms = localMzAbsIntegral(time, mz);
 metrics.interventionRatio = localInterventionRatio(mz, cfg);
+
+tireUtilMax = localTireUtilizationMax(signals);
+metrics.tireUtilPeak = localPeakAbs(tireUtilMax);
+metrics.tireUtilMean = localMeanOmitNaN(tireUtilMax);
+
+wheelTorqueSpread = localWheelTorqueSpread(signals);
+metrics.wheelTorqueSpreadRms_Nm = localRms(wheelTorqueSpread);
+metrics.wheelTorqueSpreadPeak_Nm = localPeakAbs(wheelTorqueSpread);
 end
 
 function value = localMzAbsIntegral(time, mz)
@@ -305,6 +328,55 @@ else
 end
 end
 
+function value = localLastOmitNaN(values)
+values = values(~isnan(values));
+if isempty(values)
+    value = NaN;
+else
+    value = values(end);
+end
+end
+
+function value = localTireUtilizationMax(signals)
+wheelIds = {'L1','L2','R1','R2'};
+util = [];
+for idx = 1:numel(wheelIds)
+    suffix = wheelIds{idx};
+    fx = localVectorSignal(signals, ['tireFx' suffix '_N']);
+    fy = localVectorSignal(signals, ['tireFy' suffix '_N']);
+    fz = localVectorSignal(signals, ['tireFz' suffix '_N']);
+    if isempty(fx) || isempty(fy) || isempty(fz)
+        continue;
+    end
+    count = min([numel(fx), numel(fy), numel(fz)]);
+    if count < 1
+        continue;
+    end
+    wheelUtil = hypot(fx(1:count), fy(1:count)) ./ max(abs(fz(1:count)), 1e-6);
+    if isempty(util)
+        util = wheelUtil;
+    else
+        commonCount = min(numel(util), numel(wheelUtil));
+        util = max(util(1:commonCount), wheelUtil(1:commonCount));
+    end
+end
+value = util;
+end
+
+function value = localWheelTorqueSpread(signals)
+fields = {'myDrL1_Nm','myDrL2_Nm','myDrR1_Nm','myDrR2_Nm'};
+values = [];
+for idx = 1:numel(fields)
+    v = localVectorSignal(signals, fields{idx});
+    if isempty(v)
+        value = [];
+        return;
+    end
+    values(:, idx) = v(:); %#ok<AGROW>
+end
+value = max(values, [], 2) - min(values, [], 2);
+end
+
 function fields = localPerRunFields()
 fields = [localRunFields(), localMetricFields()];
 end
@@ -322,7 +394,13 @@ fields = {'caseId','displayName','repeatIndex','Kp','Ki','Kd','status','lapTime_
 end
 
 function fields = localMetricFields()
-fields = {'yawRateRmse','yawRateMae','yawRatePeakError','lateralErrorRmse','lateralErrorPeak','ayPeakAbs','ayRms','ayStd','meanSpeed_mps','minSpeed_mps','speedStd_mps','mzRms_Nm','mzPeakAbs_Nm','mzAbsIntegral_Nms','interventionRatio'};
+fields = {'yawRateRmse','yawRateMae','yawRatePeakError', ...
+    'lateralErrorRmse','lateralErrorPeak', ...
+    'ayPeakAbs','ayRms','ayStd','axPeakAbs','axRms', ...
+    'meanSpeed_mps','minSpeed_mps','speedStd_mps','stationEnd_m', ...
+    'throttleMean','throttlePeak','steerRms_rad','steerPeakAbs_rad', ...
+    'tireUtilPeak','tireUtilMean','wheelTorqueSpreadRms_Nm','wheelTorqueSpreadPeak_Nm', ...
+    'mzRms_Nm','mzPeakAbs_Nm','mzAbsIntegral_Nms','interventionRatio'};
 end
 
 function fields = localSummaryFields()
@@ -341,8 +419,11 @@ function fields = localDeltaFields()
 fields = {'baselineCaseId','testCaseId','status','failureReason', ...
     'lapTimeDelta_s','lapTimeDelta_pct','yawRateRmseDelta','yawRateMaeDelta', ...
     'yawRatePeakErrorDelta','lateralErrorRmseDelta','lateralErrorPeakDelta', ...
-    'ayPeakAbsDelta','ayRmsDelta','ayStdDelta','meanSpeedDelta_mps', ...
-    'minSpeedDelta_mps','speedStdDelta_mps','mzRmsDelta_Nm','mzPeakAbsDelta_Nm', ...
+    'ayPeakAbsDelta','ayRmsDelta','ayStdDelta','axPeakAbsDelta','axRmsDelta', ...
+    'meanSpeedDelta_mps','minSpeedDelta_mps','speedStdDelta_mps','stationEndDelta_m', ...
+    'throttleMeanDelta','throttlePeakDelta','steerRmsDelta_rad','steerPeakAbsDelta_rad', ...
+    'tireUtilPeakDelta','tireUtilMeanDelta','wheelTorqueSpreadRmsDelta_Nm', ...
+    'wheelTorqueSpreadPeakDelta_Nm','mzRmsDelta_Nm','mzPeakAbsDelta_Nm', ...
     'mzAbsIntegralDelta_Nms','interventionRatioDelta'};
 end
 
@@ -360,9 +441,20 @@ metricMap = {
     'ayPeakAbs', 'ayPeakAbsDelta';
     'ayRms', 'ayRmsDelta';
     'ayStd', 'ayStdDelta';
+    'axPeakAbs', 'axPeakAbsDelta';
+    'axRms', 'axRmsDelta';
     'meanSpeed_mps', 'meanSpeedDelta_mps';
     'minSpeed_mps', 'minSpeedDelta_mps';
     'speedStd_mps', 'speedStdDelta_mps';
+    'stationEnd_m', 'stationEndDelta_m';
+    'throttleMean', 'throttleMeanDelta';
+    'throttlePeak', 'throttlePeakDelta';
+    'steerRms_rad', 'steerRmsDelta_rad';
+    'steerPeakAbs_rad', 'steerPeakAbsDelta_rad';
+    'tireUtilPeak', 'tireUtilPeakDelta';
+    'tireUtilMean', 'tireUtilMeanDelta';
+    'wheelTorqueSpreadRms_Nm', 'wheelTorqueSpreadRmsDelta_Nm';
+    'wheelTorqueSpreadPeak_Nm', 'wheelTorqueSpreadPeakDelta_Nm';
     'mzRms_Nm', 'mzRmsDelta_Nm';
     'mzPeakAbs_Nm', 'mzPeakAbsDelta_Nm';
     'mzAbsIntegral_Nms', 'mzAbsIntegralDelta_Nms';

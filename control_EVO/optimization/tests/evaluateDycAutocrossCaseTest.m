@@ -118,6 +118,12 @@ classdef evaluateDycAutocrossCaseTest < matlab.unittest.TestCase
             testCase.verifyEqual(signals.latTarget_m, [0.8 1.0], 'AbsTol', 1e-7);
             testCase.verifyEqual(signals.ay_mps2, [0.1 0.2] * 9.80665, 'AbsTol', 1e-7);
             testCase.verifyEqual(signals.mz_Nm, [92.6923076923077 185.384615384615], 'AbsTol', 1e-10);
+            testCase.verifyEqual(signals.station_m, [3 4], 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.ax_mps2, [0.3 0.4] * 9.80665, 'AbsTol', 1e-6);
+            testCase.verifyEqual(signals.throttle, [0.6 0.7], 'AbsTol', 1e-7);
+            testCase.verifyEqual(signals.steerSW_rad, deg2rad([12 14]), 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.myDrR2_Nm, [40 80], 'AbsTol', 1e-12);
+            testCase.verifyEqual(signals.tireFyR1_N, [90 100], 'AbsTol', 1e-12);
         end
 
         function testRefusesMixedFreshLogAndStaleEndFile(testCase)
@@ -253,12 +259,19 @@ writelines([
     "    ""XStep"" : 0.5,"
     "    ""Channels"" : ["
     "      { ""Name Aliases"" : [ ""AVz"" ], ""Units"" : ""deg/s"" },"
+    "      { ""Name Aliases"" : [ ""Ax"" ], ""Units"" : ""g"" },"
     "      { ""Name Aliases"" : [ ""Ay"" ], ""Units"" : ""g"" },"
     "      { ""Name Aliases"" : [ ""My_Dr_L1"" ], ""Units"" : ""N-m"" },"
     "      { ""Name Aliases"" : [ ""My_Dr_L2"" ], ""Units"" : ""N-m"" },"
     "      { ""Name Aliases"" : [ ""My_Dr_R1"" ], ""Units"" : ""N-m"" },"
     "      { ""Name Aliases"" : [ ""My_Dr_R2"" ], ""Units"" : ""N-m"" },"
+    "      { ""Name Aliases"" : [ ""Station"" ], ""Units"" : ""m"" },"
+    "      { ""Name Aliases"" : [ ""Steer_SW"" ], ""Units"" : ""deg"" },"
+    "      { ""Name Aliases"" : [ ""Throttle"" ], ""Units"" : ""-"" },"
     "      { ""Name Aliases"" : [ ""Vx"" ], ""Units"" : ""km/h"" },"
+    "      { ""Name Aliases"" : [ ""Fx_L1"" ], ""Units"" : ""N"" },"
+    "      { ""Name Aliases"" : [ ""Fy_R1"" ], ""Units"" : ""N"" },"
+    "      { ""Name Aliases"" : [ ""Fz_R1"" ], ""Units"" : ""N"" },"
     "      { ""Name Aliases"" : [ ""Yo"" ], ""Units"" : ""m"" },"
     "      { ""Name Aliases"" : [ ""Y_Target"" ], ""Units"" : ""m"" }"
     "    ]"
@@ -267,8 +280,8 @@ writelines([
 ], vsPath);
 
 data = [
-    5 0.1 10 20 30 40 36 1.0 0.8
-    10 0.2 20 40 60 80 72 1.5 1.0
+    5 0.3 0.1 10 20 30 40 3 12 0.6 36 70 90 400 1.0 0.8
+    10 0.4 0.2 20 40 60 80 4 14 0.7 72 80 100 400 1.5 1.0
 ];
 fid = fopen(vsbPath, 'wb');
 cleanup = onCleanup(@() fclose(fid));

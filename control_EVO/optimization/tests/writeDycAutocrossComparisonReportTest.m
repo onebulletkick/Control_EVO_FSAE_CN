@@ -22,10 +22,18 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             comparisonMetricsPath = fullfile(cfg.resultsDir, 'comparison_metrics.csv');
             runResultsPath = fullfile(cfg.resultsDir, 'run_results.csv');
             resultMatPath = fullfile(cfg.resultsDir, 'comparison_result.mat');
+            signalManifestPath = fullfile(cfg.resultsDir, 'signal_data', 'signal_manifest.csv');
+            alignedComparisonPath = fullfile(cfg.resultsDir, 'signal_data', 'aligned_dyc_comparison.csv');
+            offSignalsPath = fullfile(cfg.resultsDir, 'signal_data', 'dyc_off_repeat1_timeseries.csv');
+            onSignalsPath = fullfile(cfg.resultsDir, 'signal_data', 'dyc_on_repeat1_timeseries.csv');
             testCase.verifyTrue(isfile(reportPath));
             testCase.verifyTrue(isfile(comparisonMetricsPath));
             testCase.verifyTrue(isfile(runResultsPath));
             testCase.verifyTrue(isfile(resultMatPath));
+            testCase.verifyTrue(isfile(signalManifestPath));
+            testCase.verifyTrue(isfile(alignedComparisonPath));
+            testCase.verifyTrue(isfile(offSignalsPath));
+            testCase.verifyTrue(isfile(onSignalsPath));
 
             html = fileread(reportPath);
             testCase.verifyTrue(contains(html, 'DYC Autocross 有无控制对比报告'));
@@ -42,18 +50,32 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(html, '横摆力矩对比'));
             testCase.verifyTrue(contains(html, 'plots/speed_comparison.png'));
             testCase.verifyTrue(contains(html, '控制介入'));
+            testCase.verifyTrue(contains(html, '可复用数据文件'));
+            testCase.verifyTrue(contains(html, 'signal_data/aligned_dyc_comparison.csv'));
             testCase.verifyTrue(contains(html, '运行证据'));
             testCase.verifyTrue(contains(html, '验证边界'));
 
             comparisonMetrics = readtable(comparisonMetricsPath, 'TextType', 'string');
             perRun = readtable(runResultsPath, 'TextType', 'string');
+            manifest = readtable(signalManifestPath, 'TextType', 'string');
+            offSignals = readtable(offSignalsPath, 'TextType', 'string');
+            aligned = readtable(alignedComparisonPath, 'TextType', 'string');
             testCase.verifyEqual(height(comparisonMetrics), 2);
             testCase.verifyEqual(height(perRun), 2);
+            testCase.verifyEqual(height(manifest), 2);
+            testCase.verifyTrue(all(ismember({'time_s','speed_mps','lateralError_m','tireUtilMax','wheelTorqueSpread_Nm'}, offSignals.Properties.VariableNames)));
+            testCase.verifyTrue(all(ismember({'time_s','speed_mps_dyc_off','speed_mps_dyc_on','speed_mps_delta','lateralError_m_delta','tireUtilMax_delta','wheelTorqueSpread_Nm_delta'}, aligned.Properties.VariableNames)));
             testCase.verifyPlotFile(cfg.resultsDir, 'speed_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_rate_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_error_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'lateral_error_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_moment_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'lateral_accel_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'longitudinal_accel_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'throttle_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'steering_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'tire_utilization_comparison.png');
+            testCase.verifyPlotFile(cfg.resultsDir, 'wheel_torque_spread_comparison.png');
         end
 
         function testReportRejectsEscapedArtifactPath(testCase)
@@ -202,4 +224,25 @@ signals.latTarget_m = latTarget;
 signals.ay_mps2 = ay;
 signals.speed_mps = speed;
 signals.mz_Nm = mz;
+n = numel(time_s);
+signals.station_m = reshape(10 * (0:n-1), size(time_s));
+signals.ax_mps2 = abs(ay) + 0.5;
+signals.throttle = 0.2 + 0.01 * speed;
+signals.steerSW_rad = 0.5 * yawRate;
+signals.myDrL1_Nm = zeros(size(time_s));
+signals.myDrL2_Nm = zeros(size(time_s));
+signals.myDrR1_Nm = mz / 4;
+signals.myDrR2_Nm = mz / 2;
+signals.tireFxL1_N = 100 + mz;
+signals.tireFxL2_N = 100 + mz;
+signals.tireFxR1_N = 120 + mz;
+signals.tireFxR2_N = 120 + mz;
+signals.tireFyL1_N = 80 + 10 * ay;
+signals.tireFyL2_N = 80 + 10 * ay;
+signals.tireFyR1_N = 90 + 10 * ay;
+signals.tireFyR2_N = 90 + 10 * ay;
+signals.tireFzL1_N = 500 * ones(size(time_s));
+signals.tireFzL2_N = 500 * ones(size(time_s));
+signals.tireFzR1_N = 500 * ones(size(time_s));
+signals.tireFzR2_N = 500 * ones(size(time_s));
 end

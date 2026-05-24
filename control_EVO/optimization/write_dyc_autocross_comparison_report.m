@@ -12,11 +12,12 @@ end
 
 writetable(metrics.summary, cfg.comparisonMetricsPath);
 writetable(metrics.perRun, cfg.runResultsPath);
-save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics');
-localWriteHtmlReport(cfg, runResults, metrics);
+[cfg, analysisArtifacts] = export_dyc_autocross_analysis_data(cfg, runResults);
+save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts');
+localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts);
 end
 
-function localWriteHtmlReport(cfg, runResults, metrics)
+function localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts)
 comparison = metrics.comparison;
 summary = metrics.summary;
 perRun = metrics.perRun;
@@ -48,6 +49,7 @@ html = [
     localMechanismHtml()
     localMechanismDeltaHtml(metrics)
     localPlotSectionHtml(plotItems)
+    localDataArtifactsHtml(analysisArtifacts)
     localInterventionHtml(metrics)
     "<h2>运行证据</h2>"
     localTableToHtml(perRun, {'caseId','repeatIndex','status','lapTime_s','stopReason','failureReason','lastRunLogPath','lastRunEndPath'})
@@ -75,6 +77,18 @@ specs = [
         'title', '路径误差对比', 'yLabel', 'lateral error (m)')
     struct('kind', 'yaw_moment', 'fileName', 'yaw_moment_comparison.png', ...
         'title', '横摆力矩对比', 'yLabel', 'Mz (Nm)')
+    struct('kind', 'lateral_accel', 'fileName', 'lateral_accel_comparison.png', ...
+        'title', '横向加速度对比', 'yLabel', 'Ay (m/s^2)')
+    struct('kind', 'longitudinal_accel', 'fileName', 'longitudinal_accel_comparison.png', ...
+        'title', '纵向加速度对比', 'yLabel', 'Ax (m/s^2)')
+    struct('kind', 'throttle', 'fileName', 'throttle_comparison.png', ...
+        'title', '油门开度对比', 'yLabel', 'normalized throttle')
+    struct('kind', 'steering', 'fileName', 'steering_comparison.png', ...
+        'title', '方向盘转角对比', 'yLabel', 'steering wheel angle (rad)')
+    struct('kind', 'tire_utilization', 'fileName', 'tire_utilization_comparison.png', ...
+        'title', '轮胎合力利用率对比', 'yLabel', 'max tire force / Fz')
+    struct('kind', 'wheel_torque_spread', 'fileName', 'wheel_torque_spread_comparison.png', ...
+        'title', '四轮驱动矩离散度对比', 'yLabel', 'max(Twheel)-min(Twheel) (Nm)')
 ];
 
 plotItems = repmat(struct('title', "", 'relativePath', "", 'path', "", 'available', false, 'failureReason', ""), 0, 1);
@@ -159,6 +173,18 @@ switch string(kind)
         value = localErrorVector(signals, 'latVeh_m', 'latTarget_m');
     case "yaw_moment"
         value = localVectorField(signals, 'mz_Nm');
+    case "lateral_accel"
+        value = localVectorField(signals, 'ay_mps2');
+    case "longitudinal_accel"
+        value = localVectorField(signals, 'ax_mps2');
+    case "throttle"
+        value = localVectorField(signals, 'throttle');
+    case "steering"
+        value = localVectorField(signals, 'steerSW_rad');
+    case "tire_utilization"
+        value = localTireUtilizationMax(signals);
+    case "wheel_torque_spread"
+        value = localWheelTorqueSpread(signals);
 end
 
 if isempty(value)
@@ -200,13 +226,53 @@ if ~isstruct(run) || ~isfield(run, 'signals') || ~isstruct(run.signals)
     return;
 end
 fields = {'time_s','speed_mps','yawRate_radps','yawRateTarget_radps', ...
-    'latVeh_m','latTarget_m','ay_mps2','mz_Nm'};
+    'latVeh_m','latTarget_m','ay_mps2','ax_mps2','mz_Nm', ...
+    'station_m','throttle','steerSW_rad','myDrL1_Nm','tireFxL1_N'};
 for idx = 1:numel(fields)
     if isfield(run.signals, fields{idx}) && ~isempty(run.signals.(fields{idx}))
         tf = true;
         return;
     end
 end
+end
+
+function value = localTireUtilizationMax(signals)
+wheelIds = {'L1','L2','R1','R2'};
+value = [];
+for idx = 1:numel(wheelIds)
+    suffix = wheelIds{idx};
+    fx = localVectorField(signals, ['tireFx' suffix '_N']);
+    fy = localVectorField(signals, ['tireFy' suffix '_N']);
+    fz = localVectorField(signals, ['tireFz' suffix '_N']);
+    if isempty(fx) || isempty(fy) || isempty(fz)
+        continue;
+    end
+    count = min([numel(fx), numel(fy), numel(fz)]);
+    if count < 1
+        continue;
+    end
+    wheelUtil = hypot(fx(1:count), fy(1:count)) ./ max(abs(fz(1:count)), 1e-6);
+    if isempty(value)
+        value = wheelUtil;
+    else
+        commonCount = min(numel(value), numel(wheelUtil));
+        value = max(value(1:commonCount), wheelUtil(1:commonCount));
+    end
+end
+end
+
+function value = localWheelTorqueSpread(signals)
+fields = {'myDrL1_Nm','myDrL2_Nm','myDrR1_Nm','myDrR2_Nm'};
+values = [];
+for idx = 1:numel(fields)
+    v = localVectorField(signals, fields{idx});
+    if isempty(v)
+        value = [];
+        return;
+    end
+    values(:, idx) = v(:); %#ok<AGROW>
+end
+value = max(values, [], 2) - min(values, [], 2);
 end
 
 function value = localErrorVector(signals, actualField, targetField)
@@ -300,7 +366,11 @@ end
 columns = {'baselineCaseId','testCaseId','status','failureReason', ...
     'yawRateRmseDelta','yawRateMaeDelta','yawRatePeakErrorDelta', ...
     'lateralErrorRmseDelta','lateralErrorPeakDelta','ayPeakAbsDelta','ayRmsDelta', ...
-    'ayStdDelta','meanSpeedDelta_mps','minSpeedDelta_mps','speedStdDelta_mps', ...
+    'ayStdDelta','axPeakAbsDelta','axRmsDelta','meanSpeedDelta_mps', ...
+    'minSpeedDelta_mps','speedStdDelta_mps','stationEndDelta_m', ...
+    'throttleMeanDelta','throttlePeakDelta','steerRmsDelta_rad','steerPeakAbsDelta_rad', ...
+    'tireUtilPeakDelta','tireUtilMeanDelta','wheelTorqueSpreadRmsDelta_Nm', ...
+    'wheelTorqueSpreadPeakDelta_Nm', ...
     'mzRmsDelta_Nm','mzPeakAbsDelta_Nm','mzAbsIntegralDelta_Nms','interventionRatioDelta'};
 html = [
     "<h2>机理指标差值</h2>"
@@ -342,6 +412,37 @@ for idx = 1:numel(availableItems)
 end
 
 html = [html; "</section>"];
+end
+
+function html = localDataArtifactsHtml(analysisArtifacts)
+html = [
+    "<h2>可复用数据文件</h2>"
+    "<section class=""card"">"
+    "<p>本次仿真提取出的时序数据已单独导出，可直接用 MATLAB、Python、Excel 或其他工具继续做后处理。原始 case 时序、对齐后的 dyc_on - dyc_off 对比数据和 MAT 数据包都保存在 signal_data 目录。</p>"
+];
+
+artifactTable = table( ...
+    ["信号清单"; "对齐对比数据"; "MAT 数据包"], ...
+    [analysisArtifacts.manifestRelativePath; analysisArtifacts.alignedComparisonRelativePath; analysisArtifacts.analysisDataMatRelativePath], ...
+    ["每个 case/repeat 的导出状态、来源和行数"; "按 dyc_off 时间轴插值对齐后的时序差值"; "manifest、alignedComparison 和 timeSeriesTables"], ...
+    'VariableNames', {'artifact','relativePath','description'});
+
+if isfield(analysisArtifacts, 'timeSeriesTables') && ~isempty(analysisArtifacts.timeSeriesTables)
+    for idx = 1:numel(analysisArtifacts.timeSeriesTables)
+        item = analysisArtifacts.timeSeriesTables(idx);
+        artifactTable = [artifactTable; table( ...
+            "时序数据 " + string(item.caseId) + " repeat" + string(item.repeatIndex), ...
+            string(item.relativePath), ...
+            "单次运行原始/派生时序信号", ...
+            'VariableNames', artifactTable.Properties.VariableNames)]; %#ok<AGROW>
+    end
+end
+
+html = [
+    html
+    localTableToHtml(artifactTable, artifactTable.Properties.VariableNames)
+    "</section>"
+];
 end
 
 function html = localInterventionHtml(metrics)

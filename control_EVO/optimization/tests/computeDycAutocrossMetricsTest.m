@@ -27,8 +27,13 @@ classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
             expectedDeltaColumns = {'baselineCaseId','testCaseId','status','failureReason', ...
                 'lapTimeDelta_s','lapTimeDelta_pct','yawRateRmseDelta','yawRateMaeDelta', ...
                 'yawRatePeakErrorDelta','lateralErrorRmseDelta','lateralErrorPeakDelta', ...
-                'ayPeakAbsDelta','ayRmsDelta','ayStdDelta','meanSpeedDelta_mps', ...
-                'minSpeedDelta_mps','speedStdDelta_mps','mzRmsDelta_Nm','mzPeakAbsDelta_Nm', ...
+                'ayPeakAbsDelta','ayRmsDelta','ayStdDelta','axPeakAbsDelta','axRmsDelta', ...
+                'meanSpeedDelta_mps', 'minSpeedDelta_mps','speedStdDelta_mps', ...
+                'stationEndDelta_m','throttleMeanDelta','throttlePeakDelta', ...
+                'steerRmsDelta_rad','steerPeakAbsDelta_rad','tireUtilPeakDelta', ...
+                'tireUtilMeanDelta','wheelTorqueSpreadRmsDelta_Nm', ...
+                'wheelTorqueSpreadPeakDelta_Nm', ...
+                'mzRmsDelta_Nm','mzPeakAbsDelta_Nm', ...
                 'mzAbsIntegralDelta_Nms','interventionRatioDelta'};
             testCase.verifyEqual(height(result.delta), 1);
             testCase.verifyTrue(all(ismember(expectedDeltaColumns, result.delta.Properties.VariableNames)));
@@ -43,6 +48,11 @@ classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
             testCase.verifyLessThan(delta.lateralErrorPeakDelta, 0);
             testCase.verifyGreaterThan(delta.meanSpeedDelta_mps, 0);
             testCase.verifyGreaterThan(delta.minSpeedDelta_mps, 0);
+            testCase.verifyLessThan(delta.axPeakAbsDelta, 0);
+            testCase.verifyGreaterThan(delta.throttleMeanDelta, 0);
+            testCase.verifyLessThan(delta.steerRmsDelta_rad, 0);
+            testCase.verifyGreaterThan(delta.tireUtilPeakDelta, 0);
+            testCase.verifyGreaterThan(delta.wheelTorqueSpreadPeakDelta_Nm, 0);
             testCase.verifyGreaterThan(delta.mzRmsDelta_Nm, 0);
             testCase.verifyGreaterThan(delta.mzPeakAbsDelta_Nm, 0);
             testCase.verifyGreaterThan(delta.mzAbsIntegralDelta_Nms, 0);
@@ -55,6 +65,9 @@ classdef computeDycAutocrossMetricsTest < matlab.unittest.TestCase
             testCase.verifyLessThan(onSummary.yawRateRmse, offSummary.yawRateRmse);
             testCase.verifyLessThan(onSummary.lateralErrorRmse, offSummary.lateralErrorRmse);
             testCase.verifyGreaterThan(onSummary.meanSpeed_mps, offSummary.meanSpeed_mps);
+            testCase.verifyLessThan(onSummary.axPeakAbs, offSummary.axPeakAbs);
+            testCase.verifyGreaterThan(onSummary.tireUtilPeak, offSummary.tireUtilPeak);
+            testCase.verifyGreaterThan(onSummary.wheelTorqueSpreadPeak_Nm, offSummary.wheelTorqueSpreadPeak_Nm);
             testCase.verifyGreaterThan(onSummary.mzRms_Nm, 0);
             testCase.verifyGreaterThan(onSummary.interventionRatio, 0);
         end
@@ -185,4 +198,25 @@ signals.latTarget_m = latTarget;
 signals.ay_mps2 = ay;
 signals.speed_mps = speed;
 signals.mz_Nm = mz;
+n = numel(time_s);
+signals.station_m = reshape(10 * (0:n-1), size(time_s));
+signals.ax_mps2 = abs(ay) + 0.5;
+signals.throttle = 0.2 + 0.01 * speed;
+signals.steerSW_rad = 0.5 * yawRate;
+signals.myDrL1_Nm = zeros(size(time_s));
+signals.myDrL2_Nm = zeros(size(time_s));
+signals.myDrR1_Nm = mz / 4;
+signals.myDrR2_Nm = mz / 2;
+signals.tireFxL1_N = 100 + mz;
+signals.tireFxL2_N = 100 + mz;
+signals.tireFxR1_N = 120 + mz;
+signals.tireFxR2_N = 120 + mz;
+signals.tireFyL1_N = 80 + 10 * ay;
+signals.tireFyL2_N = 80 + 10 * ay;
+signals.tireFyR1_N = 90 + 10 * ay;
+signals.tireFyR2_N = 90 + 10 * ay;
+signals.tireFzL1_N = 500 * ones(size(time_s));
+signals.tireFzL2_N = 500 * ones(size(time_s));
+signals.tireFzR1_N = 500 * ones(size(time_s));
+signals.tireFzR2_N = 500 * ones(size(time_s));
 end
