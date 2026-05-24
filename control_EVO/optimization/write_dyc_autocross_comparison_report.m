@@ -5,6 +5,8 @@ cfg.reportPath = localPathUnderResultsDir(cfg, 'reportPath', 'report.html');
 cfg.comparisonMetricsPath = localPathUnderResultsDir(cfg, 'comparisonMetricsPath', 'comparison_metrics.csv');
 cfg.runResultsPath = localPathUnderResultsDir(cfg, 'runResultsPath', 'run_results.csv');
 cfg.resultMatPath = localPathUnderResultsDir(cfg, 'resultMatPath', 'comparison_result.mat');
+cfg.effectivenessAnalysisPath = localPathUnderResultsDir(cfg, 'effectivenessAnalysisPath', 'effectiveness_analysis.txt');
+cfg.effectivenessAnalysisRelativePath = localRelativePathUnderFolder(cfg.effectivenessAnalysisPath, cfg.resultsDir);
 
 if ~isfolder(cfg.resultsDir)
     mkdir(cfg.resultsDir);
@@ -13,11 +15,13 @@ end
 writetable(metrics.summary, cfg.comparisonMetricsPath);
 writetable(metrics.perRun, cfg.runResultsPath);
 [cfg, analysisArtifacts] = export_dyc_autocross_analysis_data(cfg, runResults);
-save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts');
-localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts);
+analysisLines = localEffectivenessAnalysisLines(cfg, metrics, analysisArtifacts);
+localWriteTextFile(cfg.effectivenessAnalysisPath, analysisLines);
+save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts', 'analysisLines');
+localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts, analysisLines);
 end
 
-function localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts)
+function localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts, analysisLines)
 comparison = metrics.comparison;
 summary = metrics.summary;
 perRun = metrics.perRun;
@@ -44,6 +48,7 @@ html = [
     "<h1>DYC Autocross 有无控制对比报告</h1>"
     localExperimentSummaryHtml(cfg)
     localConclusionHtml(summary, comparison)
+    localDetailedEffectivenessHtml(cfg, analysisLines)
     "<h2>关键指标</h2>"
     localTableToHtml(summary, summary.Properties.VariableNames)
     localMechanismHtml()
@@ -347,6 +352,139 @@ end
 html = [html; "</section>"];
 end
 
+function lines = localEffectivenessAnalysisLines(cfg, metrics, analysisArtifacts)
+summary = metrics.summary;
+comparison = metrics.comparison;
+
+offLap = localSummaryValue(summary, "dyc_off", "lapTime_s");
+onLap = localSummaryValue(summary, "dyc_on", "lapTime_s");
+
+lines = [
+    "详细 DYC 有效性分析"
+    ""
+    "1. 有效性判断"
+];
+
+if string(comparison.status) == "valid"
+    lapDelta = double(comparison.lapTimeDelta_s);
+    lapPct = double(comparison.lapTimeDelta_pct);
+    if isfinite(lapDelta) && lapDelta < 0
+        verdict = "当前单次 Autocross 仿真支持 DYC 有效：DYC 开启后圈速缩短，同时需要结合横向路径误差、速度保持、横摆力矩和轮胎利用率判断收益来源。";
+    elseif isfinite(lapDelta) && lapDelta > 0
+        verdict = "当前单次 Autocross 仿真不支持 DYC 带来圈速收益：DYC 开启后圈速变慢，需要继续检查控制介入是否过强、轮胎利用率是否恶化或速度保持是否受损。";
+    else
+        verdict = "当前单次 Autocross 仿真圈速差值接近零，不能只凭圈速判断 DYC 是否有效，需要依赖机理指标继续分析。";
+    end
+    lines = [
+        lines
+        verdict
+        "圈速：dyc_off = " + localFormatValue(offLap, " s") + "，dyc_on = " + localFormatValue(onLap, " s") + "，dyc_on - dyc_off = " + localFormatSignedValue(lapDelta, " s") + "（" + localFormatSignedValue(lapPct, " %") + "）。"
+    ];
+else
+    lines = [
+        lines
+        "当前数据不输出 DYC 有效性结论，因为 comparison.status = invalid。"
+        "失败原因：" + localStringValue(comparison.failureReason)
+        "圈速：dyc_off = " + localFormatValue(offLap, " s") + "，dyc_on = " + localFormatValue(onLap, " s") + "。"
+    ];
+end
+
+lines = [
+    lines
+    ""
+    "2. 独立后处理数据"
+    "本次数据不是只写进 HTML，而是单独落盘，后续可用 MATLAB、Python 或 Excel 继续处理。"
+    "- 指标汇总表：" + localStringValue(localField(cfg, 'comparisonMetricsPath'))
+    "- 单次运行表：" + localStringValue(localField(cfg, 'runResultsPath'))
+    "- 时序清单：" + localArtifactField(analysisArtifacts, 'manifestRelativePath')
+    "- 对齐后的 dyc_on - dyc_off 时序差值：" + localArtifactField(analysisArtifacts, 'alignedComparisonRelativePath')
+    "- MAT 数据包：" + localArtifactField(analysisArtifacts, 'analysisDataMatRelativePath')
+    ""
+    "3. 机理证据链"
+    localEffectivenessMetricLine("横向路径误差 RMSE", summary, "lateralErrorRmse", metrics, "lateralErrorRmseDelta", " m", "负值表示 DYC 开启后车辆横向位置更接近目标轨迹。")
+    localEffectivenessMetricLine("速度保持均值", summary, "meanSpeed_mps", metrics, "meanSpeedDelta_mps", " m/s", "正值表示 DYC 没有通过明显牺牲平均速度换取稳定性。")
+    localEffectivenessMetricLine("最低速度", summary, "minSpeed_mps", metrics, "minSpeedDelta_mps", " m/s", "正值通常意味着弯中或低速段速度保持更好。")
+    localEffectivenessMetricLine("油门均值", summary, "throttleMean", metrics, "throttleMeanDelta", "", "若速度提升同时油门均值下降，说明收益更可能来自姿态/路径效率而非单纯加大油门。")
+    localEffectivenessMetricLine("轮胎利用率峰值", summary, "tireUtilPeak", metrics, "tireUtilPeakDelta", "", "负值表示最大轮胎合力利用率下降，说明峰值饱和风险降低；该值来自 CarSim 导出 Fx/Fy/Fz 后处理。")
+    localEffectivenessMetricLine("四轮驱动矩离散度峰值", summary, "wheelTorqueSpreadPeak_Nm", metrics, "wheelTorqueSpreadPeakDelta_Nm", " Nm", "正值表示控制器通过左右/前后轮驱动矩差异制造附加横摆力矩。")
+    localEffectivenessMetricLine("横摆力矩峰值", summary, "mzPeakAbs_Nm", metrics, "mzPeakAbsDelta_Nm", " Nm", "正值表示 DYC 实际输出了更强的横摆修正能力。")
+    localEffectivenessMetricLine("横摆力矩绝对积分", summary, "mzAbsIntegral_Nms", metrics, "mzAbsIntegralDelta_Nms", " Nms", "正值表示整圈控制介入总量增加。")
+    localEffectivenessMetricLine("控制介入占比", summary, "interventionRatio", metrics, "interventionRatioDelta", "", "正值表示 DYC 在更多时间片超过横摆力矩有效阈值。")
+    ""
+    "4. 为什么 DYC 有效"
+    "DYC 的直接作用不是增加整车总驱动力，而是通过四轮驱动矩差异形成附加横摆力矩，让车辆横摆响应更接近目标。"
+    "如果圈速缩短、横向路径误差下降、速度保持没有恶化，同时横摆力矩和四轮驱动矩离散度明显增加，就能形成一条较完整的有效性证据链：控制器介入 -> 姿态/路径改善 -> 弯中或出弯效率提升 -> 圈速改善。"
+    "轮胎利用率用于解释收益是否来自更合理的轮胎负荷分配。如果 DYC 开启后峰值利用率下降或没有恶化，说明控制器没有单纯把车辆推向更强饱和。"
+    ""
+    "5. 还能继续分析的数据"
+    "已导出的 aligned_dyc_comparison.csv 还包含 station、speed、yaw-rate、lateral error、Ay/Ax、Mz、throttle、steer、tireUtilMax、wheelTorqueSpread 和 leftRightDriveTorqueDelta 等列，可继续做分段/弯道级分析。"
+    "值得继续深挖的方向包括：按 station 分段统计入口/弯中/出弯速度，统计轮胎利用率超过阈值的持续时间，分析 leftRightDriveTorqueDelta 与 Mz 的对应关系，以及观察油门开度和纵向加速度是否说明 DYC 改善了出弯牵引。"
+    ""
+    "6. 证据不足与边界"
+    "本结论来自单次 Autocross 仿真或当前 repeat 配置，不等同于统计显著结论；若 repeatCount 增加，应比较均值、标准差和最差圈。"
+    "当前结果只代表离线 Simulink/CarSim 协同仿真，不代表 DIL、实时硬件或实车验证。"
+    "如果 CarSim Export 未包含目标横摆角速度、方向盘转角或更多轮胎通道，相关 yaw tracking、driver demand 和 per-wheel tire saturation 结论只能标记为不可用，不能强行外推。"
+];
+end
+
+function html = localDetailedEffectivenessHtml(cfg, analysisLines)
+relativePath = localStringValue(localField(cfg, 'effectivenessAnalysisRelativePath'));
+if strlength(relativePath) == 0
+    relativePath = "effectiveness_analysis.txt";
+end
+
+html = [
+    "<h2>详细有效性分析</h2>"
+    "<section class=""card"">"
+    "<p>下面把圈速、误差、速度保持、控制介入和轮胎利用率组织成单独的证据链。同一份文字分析已写入 <a href=""" + localEscape(relativePath) + """>" + localEscape(relativePath) + "</a>，便于脱离 HTML 继续引用。</p>"
+];
+
+for idx = 1:numel(analysisLines)
+    line = strtrim(string(analysisLines(idx)));
+    if strlength(line) == 0 || line == "详细 DYC 有效性分析"
+        continue;
+    end
+    if ~isempty(regexp(char(line), '^\d+\.\s', 'once'))
+        html = [html; "<h3>" + localEscape(line) + "</h3>"]; %#ok<AGROW>
+    else
+        html = [html; "<p>" + localEscape(line) + "</p>"]; %#ok<AGROW>
+    end
+end
+
+html = [html; "</section>"];
+end
+
+function line = localEffectivenessMetricLine(label, summary, metricName, metrics, deltaName, suffix, interpretation)
+offValue = localSummaryValue(summary, "dyc_off", metricName);
+onValue = localSummaryValue(summary, "dyc_on", metricName);
+deltaValue = localDeltaValue(metrics, deltaName);
+line = "- " + string(label) + "：dyc_off = " + localFormatValue(offValue, suffix) + ...
+    "，dyc_on = " + localFormatValue(onValue, suffix) + ...
+    "，dyc_on - dyc_off = " + localFormatSignedValue(deltaValue, suffix) + ...
+    "。" + string(interpretation);
+end
+
+function value = localDeltaValue(metrics, fieldName)
+value = NaN;
+if ~isfield(metrics, 'delta') || isempty(metrics.delta)
+    return;
+end
+delta = metrics.delta;
+if istable(delta) && ismember(fieldName, delta.Properties.VariableNames) && height(delta) >= 1
+    value = delta.(fieldName)(1);
+end
+end
+
+function text = localArtifactField(artifacts, fieldName)
+text = "unavailable";
+if isstruct(artifacts) && isfield(artifacts, fieldName)
+    candidate = localStringValue(artifacts.(fieldName));
+    if strlength(candidate) > 0
+        text = candidate;
+    end
+end
+end
+
 function html = localMechanismHtml()
 html = [
     "<h2>机理解释</h2>"
@@ -632,6 +770,21 @@ elseif localRawPathClaimsUnderFolder(candidatePath, cfg.resultsDir)
 else
     pathOut = fullfile(cfg.resultsDir, fileName);
 end
+end
+
+function relativePath = localRelativePathUnderFolder(pathValue, folderValue)
+pathText = string(localCanonicalPath(pathValue));
+folderText = string(localCanonicalPath(folderValue));
+if ~localPathIsUnderFolder(pathText, folderText)
+    relativePath = localStringValue(pathValue);
+    return;
+end
+if pathText == folderText
+    relativePath = "";
+    return;
+end
+relativePath = extractAfter(pathText, strlength(folderText) + 1);
+relativePath = replace(relativePath, string(filesep), "/");
 end
 
 function tf = localCanonicalParentIsUnderFolder(pathValue, folderValue)

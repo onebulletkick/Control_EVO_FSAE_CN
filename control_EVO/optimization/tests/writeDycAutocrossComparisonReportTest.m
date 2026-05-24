@@ -26,6 +26,7 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             alignedComparisonPath = fullfile(cfg.resultsDir, 'signal_data', 'aligned_dyc_comparison.csv');
             offSignalsPath = fullfile(cfg.resultsDir, 'signal_data', 'dyc_off_repeat1_timeseries.csv');
             onSignalsPath = fullfile(cfg.resultsDir, 'signal_data', 'dyc_on_repeat1_timeseries.csv');
+            analysisTextPath = fullfile(cfg.resultsDir, 'effectiveness_analysis.txt');
             testCase.verifyTrue(isfile(reportPath));
             testCase.verifyTrue(isfile(comparisonMetricsPath));
             testCase.verifyTrue(isfile(runResultsPath));
@@ -34,11 +35,17 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(isfile(alignedComparisonPath));
             testCase.verifyTrue(isfile(offSignalsPath));
             testCase.verifyTrue(isfile(onSignalsPath));
+            testCase.verifyTrue(isfile(analysisTextPath));
 
             html = fileread(reportPath);
             testCase.verifyTrue(contains(html, 'DYC Autocross 有无控制对比报告'));
             testCase.verifyTrue(contains(html, '圈速差值'));
             testCase.verifyTrue(contains(html, '机理解释'));
+            testCase.verifyTrue(contains(html, '详细有效性分析'));
+            testCase.verifyTrue(contains(html, '有效性判断'));
+            testCase.verifyTrue(contains(html, '为什么 DYC 有效'));
+            testCase.verifyTrue(contains(html, '证据不足与边界'));
+            testCase.verifyTrue(contains(html, 'effectiveness_analysis.txt'));
             testCase.verifyTrue(contains(html, '机理指标差值'));
             testCase.verifyTrue(contains(html, 'yawRateRmseDelta'));
             testCase.verifyTrue(contains(html, 'interventionRatioDelta'));
@@ -60,11 +67,18 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             manifest = readtable(signalManifestPath, 'TextType', 'string');
             offSignals = readtable(offSignalsPath, 'TextType', 'string');
             aligned = readtable(alignedComparisonPath, 'TextType', 'string');
+            analysisText = fileread(analysisTextPath);
             testCase.verifyEqual(height(comparisonMetrics), 2);
             testCase.verifyEqual(height(perRun), 2);
             testCase.verifyEqual(height(manifest), 2);
             testCase.verifyTrue(all(ismember({'time_s','speed_mps','lateralError_m','tireUtilMax','wheelTorqueSpread_Nm'}, offSignals.Properties.VariableNames)));
             testCase.verifyTrue(all(ismember({'time_s','speed_mps_dyc_off','speed_mps_dyc_on','speed_mps_delta','lateralError_m_delta','tireUtilMax_delta','wheelTorqueSpread_Nm_delta'}, aligned.Properties.VariableNames)));
+            testCase.verifyTrue(contains(analysisText, '详细 DYC 有效性分析'));
+            testCase.verifyTrue(contains(analysisText, '圈速'));
+            testCase.verifyTrue(contains(analysisText, '横向路径误差'));
+            testCase.verifyTrue(contains(analysisText, '横摆力矩'));
+            testCase.verifyTrue(contains(analysisText, '轮胎利用率'));
+            testCase.verifyTrue(contains(analysisText, '单次 Autocross 仿真'));
             testCase.verifyPlotFile(cfg.resultsDir, 'speed_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_rate_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_error_comparison.png');
