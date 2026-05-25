@@ -15,8 +15,8 @@ classdef dycFigure8ComparisonConfigTest < matlab.unittest.TestCase
             testCase.verifyEqual(cfg.scenario.displayName, "八字绕环");
             testCase.verifyEqual(cfg.reportTitle, "DYC 八字绕环有无控制对比报告");
             testCase.verifyTrue(endsWith(cfg.resultsDir, '_dyc_figure8_comparison'));
-            testCase.verifyEqual(cfg.metric.primaryMetric, 'carsim_autocross_stop_time');
-            testCase.verifyEqual(cfg.metric.requiredStopReason, 'VS Command STOP_RUN_NOW End event triggered');
+            testCase.verifyEqual(cfg.metric.primaryMetric, 'carsim_station_stop_time');
+            testCase.verifyEqual(cfg.metric.requiredStopReason, 'Station limit reached');
             testCase.verifyEqual(cfg.cases(1).id, 'dyc_off');
             testCase.verifyEqual(cfg.cases(1).pid.Kp, 0);
             testCase.verifyEqual(cfg.cases(2).id, 'dyc_on');

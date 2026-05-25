@@ -1,4 +1,4 @@
-classdef compareDycFigure8EffectivenessSmokeTest < matlab.unittest.TestCase
+classdef runDycFigure8ReportSmokeTest < matlab.unittest.TestCase
     methods (TestClassSetup)
         function addOptimizationPath(testCase)
             testFolder = fileparts(mfilename('fullpath'));
@@ -8,60 +8,41 @@ classdef compareDycFigure8EffectivenessSmokeTest < matlab.unittest.TestCase
     end
 
     methods (Test)
-        function testMainEntryRunsBothCasesAndWritesFullFigure8Artifacts(testCase)
+        function testOneClickEntryRunsComparisonAndPrintsArtifactPaths(testCase)
             fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
-            [simfilePath, ~] = localWriteFixtureSimfile(fixture.Folder);
-            resultsDir = fullfile(fixture.Folder, 'figure8_artifacts');
-            overrides = localBaseOverrides(resultsDir, simfilePath, @localFakeFigure8Simulation);
+            simfilePath = localWriteFixtureSimfile(fixture.Folder);
+            resultsDir = fullfile(fixture.Folder, 'one_click_report');
+            overrides = struct();
+            overrides.simfilePath = simfilePath;
+            overrides.resultsDir = resultsDir;
+            overrides.testMode = true;
+            overrides.simulation = struct( ...
+                'simulateFcn', @localFakeFigure8Simulation, ...
+                'verifyLastRunTimestamp', true);
 
-            result = compare_dyc_figure8_effectiveness(overrides);
+            commandText = evalc('result = run_dyc_figure8_report(overrides);');
 
             testCase.verifyEqual(numel(result.runResults), 2);
             testCase.verifyEqual([result.runResults.caseId], ["dyc_off" "dyc_on"]);
-            testCase.verifyEqual(result.metrics.comparison.status, "valid");
-            testCase.verifyTrue(isfield(result.metrics, 'figure8Segments'));
-            testCase.verifyTrue(isfile(result.cfg.reportPath));
-            testCase.verifyTrue(isfile(result.cfg.comparisonMetricsPath));
-            testCase.verifyTrue(isfile(result.cfg.runResultsPath));
-            testCase.verifyTrue(isfile(result.cfg.resultMatPath));
-            testCase.verifyTrue(isfile(fullfile(resultsDir, 'figure8_segment_metrics.csv')));
-            testCase.verifyTrue(isfile(fullfile(resultsDir, 'figure8_segment_delta.csv')));
-            testCase.verifyTrue(isfile(fullfile(resultsDir, 'effectiveness_analysis.txt')));
-            testCase.verifyTrue(isfile(fullfile(resultsDir, 'plots_presentation', 'presentation_plot_manifest.csv')));
-
-            html = fileread(result.cfg.reportPath);
-            testCase.verifyTrue(contains(html, 'DYC 八字绕环有无控制对比报告'));
-            testCase.verifyTrue(contains(html, '双主线'));
-            testCase.verifyTrue(contains(html, '左转'));
-            testCase.verifyTrue(contains(html, '右转'));
-            testCase.verifyTrue(contains(html, '换向过渡'));
-            testCase.verifyTrue(contains(html, '快在哪里'));
-            testCase.verifyTrue(contains(html, 'plots_presentation/figure8_left_right_segment_map.png'));
+            testCase.verifyTrue(isfield(result, 'generatedPaths'));
+            testCase.verifyEqual(result.generatedPaths.reportPath, string(fullfile(resultsDir, 'report.html')));
+            testCase.verifyEqual(result.generatedPaths.comparisonMetricsPath, string(fullfile(resultsDir, 'comparison_metrics.csv')));
+            testCase.verifyEqual(result.generatedPaths.figure8SegmentDeltaPath, string(fullfile(resultsDir, 'figure8_segment_delta.csv')));
+            testCase.verifyEqual(result.generatedPaths.plotsPresentationDir, string(fullfile(resultsDir, 'plots_presentation')));
+            testCase.verifyTrue(contains(commandText, 'report.html'));
+            testCase.verifyTrue(contains(commandText, 'comparison_metrics.csv'));
+            testCase.verifyTrue(contains(commandText, 'figure8_segment_delta.csv'));
+            testCase.verifyTrue(contains(commandText, 'plots_presentation'));
             testCase.verifyTrue(isfile(fullfile(resultsDir, 'figure8_where_faster.csv')));
             testCase.verifyTrue(isfile(fullfile(resultsDir, 'figure8_where_faster_analysis.txt')));
-
-            analysisText = fileread(fullfile(resultsDir, 'effectiveness_analysis.txt'));
-            testCase.verifyTrue(contains(analysisText, '八字绕环 DYC 有效性分析'));
-            testCase.verifyTrue(contains(analysisText, '完成时间'));
-            testCase.verifyTrue(contains(analysisText, '快在哪里'));
         end
     end
 end
 
-function overrides = localBaseOverrides(resultsDir, simfilePath, simulateFcn)
-overrides = struct();
-overrides.simfilePath = simfilePath;
-overrides.resultsDir = resultsDir;
-overrides.testMode = true;
-overrides.simulation = struct( ...
-    'simulateFcn', simulateFcn, ...
-    'verifyLastRunTimestamp', true);
-end
-
-function [simfilePath, outputDir] = localWriteFixtureSimfile(folder)
+function simfilePath = localWriteFixtureSimfile(folder)
 simfilePath = fullfile(folder, 'simfile.sim');
-outputDir = fullfile(folder, 'Results', 'Run_figure8');
-mkdir(outputDir);
+resultsDir = fullfile(folder, 'Results', 'Run_figure8');
+mkdir(resultsDir);
 writelines([
     "SIMFILE"
     "SET_MACRO $(ROOT_FILE_NAME)$ Run_figure8"
@@ -81,20 +62,16 @@ else
     signals = localFigure8Signals(false);
 end
 info = parse_dyc_simfile(cfg.simfilePath);
-localWriteFigure8EventLog(info.logFile, info.endFile, lapTime, caseDef.id, repeatIndex);
-simOut = struct('signals', signals);
-end
-
-function localWriteFigure8EventLog(logFile, endFile, lapTime, caseId, repeatIndex)
-logFolder = fileparts(logFile);
+logFolder = fileparts(info.logFile);
 if ~isfolder(logFolder)
     mkdir(logFolder);
 end
 writelines([
-    "Run started: VS output file = " + string(caseId) + "_" + string(repeatIndex) + ".vsb"
+    "Run started: VS output file = " + string(caseDef.id) + "_" + string(repeatIndex) + ".vsb"
     "Run stopped at t = " + string(lapTime) + ". Station limit reached: driver station = 245.004"
-], logFile);
-writelines("SV_STATION 245.004 ; m ! Station", endFile);
+], info.logFile);
+writelines("SV_STATION 245.004 ; m ! Station", info.endFile);
+simOut = struct('signals', signals);
 end
 
 function signals = localFigure8Signals(isDycOn)

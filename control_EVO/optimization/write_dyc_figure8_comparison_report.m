@@ -19,13 +19,14 @@ writetable(metrics.figure8Segments, cfg.figure8.segmentMetricsPath);
 writetable(metrics.figure8SegmentDelta, cfg.figure8.segmentDeltaPath);
 [cfg, analysisArtifacts] = export_dyc_autocross_analysis_data(cfg, runResults);
 plotManifest = plot_dyc_figure8_presentation_figures(cfg.resultsDir);
-analysisLines = localAnalysisLines(cfg, metrics, analysisArtifacts);
+whereFasterAnalysis = analyze_dyc_figure8_report_results(cfg.resultsDir);
+analysisLines = whereFasterAnalysis.analysisLines;
 localWriteTextFile(cfg.effectivenessAnalysisPath, analysisLines);
-localWriteHtmlReport(cfg, metrics, analysisArtifacts, plotManifest, analysisLines);
-save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts', 'plotManifest', 'analysisLines');
+localWriteHtmlReport(cfg, metrics, analysisArtifacts, plotManifest, analysisLines, whereFasterAnalysis);
+save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts', 'plotManifest', 'analysisLines', 'whereFasterAnalysis');
 end
 
-function localWriteHtmlReport(cfg, metrics, analysisArtifacts, plotManifest, analysisLines)
+function localWriteHtmlReport(cfg, metrics, analysisArtifacts, plotManifest, analysisLines, whereFasterAnalysis)
 html = [
     "<!doctype html>"
     "<html lang=""zh-CN"">"
@@ -46,6 +47,7 @@ html = [
     "<h1>" + localEscape(cfg.reportTitle) + "</h1>"
     localConclusionHtml(metrics)
     localAnalysisHtml(analysisLines)
+    localWhereFasterHtml(whereFasterAnalysis)
     "<h2>关键指标</h2>"
     localTableToHtml(metrics.summary, metrics.summary.Properties.VariableNames)
     "<h2>八字绕环左右转/换向分段指标</h2>"
@@ -66,6 +68,17 @@ html = [
     "</main></body></html>"
 ];
 localWriteTextFile(cfg.reportPath, html);
+end
+
+function html = localWhereFasterHtml(whereFasterAnalysis)
+html = [
+    "<h2>快在哪里</h2>"
+    "<section class=""card"">"
+    "<p>下表从已导出的 CSV 中汇总 DYC 开启后相对关闭状态的变化。delta 均为 dyc_on - dyc_off。</p>"
+    localTableToHtml(whereFasterAnalysis.whereFasterTable, ...
+        {'scope','metric','dycOffValue','dycOnValue','delta','unit','supportsDyc','interpretation'})
+    "</section>"
+];
 end
 
 function html = localConclusionHtml(metrics)
@@ -175,16 +188,19 @@ end
 
 function html = localArtifactHtml(analysisArtifacts, cfg)
 tbl = table( ...
-    ["信号清单"; "对齐对比数据"; "MAT 数据包"; "八字分段指标"; "八字分段差值"], ...
+    ["信号清单"; "对齐对比数据"; "MAT 数据包"; "八字分段指标"; "八字分段差值"; "快在哪里分析表"; "快在哪里文字分析"], ...
     [localArtifactField(analysisArtifacts, 'manifestRelativePath'); ...
     localArtifactField(analysisArtifacts, 'alignedComparisonRelativePath'); ...
     localArtifactField(analysisArtifacts, 'analysisDataMatRelativePath'); ...
-    "figure8_segment_metrics.csv"; "figure8_segment_delta.csv"], ...
+    "figure8_segment_metrics.csv"; "figure8_segment_delta.csv"; ...
+    "figure8_where_faster.csv"; "figure8_where_faster_analysis.txt"], ...
     ["每个 case/repeat 的导出状态、来源和行数"; ...
     "按 dyc_off 时间轴插值对齐后的时序差值"; ...
     "manifest、alignedComparison、timeSeriesTables 和 artifacts"; ...
     "左转、右转、换向过渡区的分段统计"; ...
-    "dyc_on - dyc_off 的分段差值"], ...
+    "dyc_on - dyc_off 的分段差值"; ...
+    "完成时间、速度、路径误差、轮胎利用率和横摆力矩的可读汇总"; ...
+    "与 HTML 报告复用的自动文字结论"], ...
     'VariableNames', {'artifact','relativePath','description'});
 html = localTableToHtml(tbl, tbl.Properties.VariableNames);
 if isfield(cfg, 'figure8') && isfield(cfg.figure8, 'presentationPlotManifestPath')
