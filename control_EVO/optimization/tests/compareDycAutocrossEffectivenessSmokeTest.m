@@ -24,6 +24,12 @@ classdef compareDycAutocrossEffectivenessSmokeTest < matlab.unittest.TestCase
             testCase.verifyTrue(isfile(result.cfg.comparisonMetricsPath));
             testCase.verifyTrue(isfile(result.cfg.runResultsPath));
             testCase.verifyTrue(isfile(result.cfg.resultMatPath));
+            testCase.verifyTrue(isfile(fullfile(resultsDir, 'autocross_where_faster.csv')));
+            testCase.verifyTrue(isfile(fullfile(resultsDir, 'autocross_where_faster_analysis.txt')));
+            testCase.verifyTrue(isfile(fullfile(resultsDir, 'plots_presentation', 'presentation_plot_manifest.csv')));
+
+            html = fileread(result.cfg.reportPath);
+            testCase.verifyTrue(contains(html, '快在哪里'));
 
             runResultsTable = readtable(result.cfg.runResultsPath, 'TextType', 'string');
             testCase.verifyEqual(sort(runResultsTable.caseId), ["dyc_off"; "dyc_on"]);

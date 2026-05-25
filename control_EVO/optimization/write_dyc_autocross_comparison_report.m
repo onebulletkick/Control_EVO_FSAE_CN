@@ -15,17 +15,22 @@ end
 writetable(metrics.summary, cfg.comparisonMetricsPath);
 writetable(metrics.perRun, cfg.runResultsPath);
 [cfg, analysisArtifacts] = export_dyc_autocross_analysis_data(cfg, runResults);
-analysisLines = localEffectivenessAnalysisLines(cfg, metrics, analysisArtifacts);
+plotItems = localCreateAnalysisPlots(cfg, runResults);
+plotManifest = localTryCreatePresentationPlots(cfg);
+whereFasterAnalysis = localTryAnalyzeWhereFaster(cfg, metrics, analysisArtifacts);
+analysisLines = whereFasterAnalysis.analysisLines;
 localWriteTextFile(cfg.effectivenessAnalysisPath, analysisLines);
-save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts', 'analysisLines');
-localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts, analysisLines);
+save(cfg.resultMatPath, 'cfg', 'runResults', 'metrics', 'analysisArtifacts', ...
+    'analysisLines', 'plotItems', 'plotManifest', 'whereFasterAnalysis');
+localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts, ...
+    analysisLines, plotItems, plotManifest, whereFasterAnalysis);
 end
 
-function localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts, analysisLines)
+function localWriteHtmlReport(cfg, runResults, metrics, analysisArtifacts, ...
+    analysisLines, plotItems, plotManifest, whereFasterAnalysis)
 comparison = metrics.comparison;
 summary = metrics.summary;
 perRun = metrics.perRun;
-plotItems = localCreateAnalysisPlots(cfg, runResults);
 
 html = [
     "<!doctype html>"
@@ -49,12 +54,14 @@ html = [
     localExperimentSummaryHtml(cfg)
     localConclusionHtml(summary, comparison)
     localDetailedEffectivenessHtml(cfg, analysisLines)
+    localWhereFasterHtml(whereFasterAnalysis)
     "<h2>关键指标</h2>"
     localTableToHtml(summary, summary.Properties.VariableNames)
     localMechanismHtml()
     localMechanismDeltaHtml(metrics)
     localPlotSectionHtml(plotItems)
-    localDataArtifactsHtml(analysisArtifacts)
+    localPresentationPlotSectionHtml(plotManifest)
+    localDataArtifactsHtml(analysisArtifacts, whereFasterAnalysis, plotManifest)
     localInterventionHtml(metrics)
     "<h2>运行证据</h2>"
     localTableToHtml(perRun, {'caseId','repeatIndex','status','lapTime_s','stopReason','failureReason','lastRunLogPath','lastRunEndPath'})
@@ -119,6 +126,49 @@ for idx = 1:numel(specs)
         plotItems(end+1, 1) = item; %#ok<AGROW>
     end
 end
+end
+
+function plotManifest = localTryCreatePresentationPlots(cfg)
+try
+    plotManifest = plot_dyc_autocross_presentation_figures(cfg.resultsDir);
+catch err
+    plotManifest = localEmptyPresentationManifest();
+    plotManifest = [plotManifest; table( ...
+        "presentation_plot_manifest.csv", "展示图生成失败", "", "", false, ...
+        "展示图未生成：" + string(err.message), ...
+        'VariableNames', plotManifest.Properties.VariableNames)]; %#ok<AGROW>
+end
+end
+
+function manifest = localEmptyPresentationManifest()
+manifest = table('Size', [0 6], ...
+    'VariableTypes', {'string','string','string','string','logical','string'}, ...
+    'VariableNames', {'fileName','title','relativePath','fullPath','available','failureReason'});
+end
+
+function analysis = localTryAnalyzeWhereFaster(cfg, metrics, analysisArtifacts)
+try
+    analysis = analyze_dyc_autocross_report_results(cfg.resultsDir);
+catch err
+    analysis = struct();
+    analysis.resultsDir = string(cfg.resultsDir);
+    analysis.whereFasterPath = string(fullfile(cfg.resultsDir, 'autocross_where_faster.csv'));
+    analysis.analysisTextPath = string(fullfile(cfg.resultsDir, 'autocross_where_faster_analysis.txt'));
+    analysis.whereFasterTable = localEmptyWhereFasterTable();
+    analysis.analysisLines = [
+        localEffectivenessAnalysisLines(cfg, metrics, analysisArtifacts)
+        ""
+        "7. 快在哪里分析不可用"
+        "自动后处理未生成 autocross_where_faster.csv，原因：" + string(err.message)
+    ];
+    analysis.conclusion = "快在哪里分析不可用";
+end
+end
+
+function tbl = localEmptyWhereFasterTable()
+tbl = table('Size', [0 9], ...
+    'VariableTypes', {'string','string','double','double','double','string','string','logical','string'}, ...
+    'VariableNames', {'scope','metric','dycOffValue','dycOnValue','delta','unit','betterDirection','supportsDyc','interpretation'});
 end
 
 function [isAvailable, failureReason] = localWriteAnalysisPlot(plotPath, spec, runResults)
@@ -454,6 +504,31 @@ end
 html = [html; "</section>"];
 end
 
+function html = localWhereFasterHtml(whereFasterAnalysis)
+html = [
+    "<h2>快在哪里</h2>"
+    "<section class=""card"">"
+];
+
+if ~isstruct(whereFasterAnalysis) || ~isfield(whereFasterAnalysis, 'whereFasterTable') || ...
+        height(whereFasterAnalysis.whereFasterTable) == 0
+    html = [
+        html
+        "<p>当前结果缺少可用于“快在哪里”分析的对齐时序数据，因此本章节不输出分项表。</p>"
+        "</section>"
+    ];
+    return;
+end
+
+html = [
+    html
+    "<p>下表从已导出的 CSV/MAT 结果中汇总 DYC 开启后相对关闭状态的变化。delta 均为 dyc_on - dyc_off；supportsDyc 表示该分项是否支持 DYC 有效。</p>"
+    localTableToHtml(whereFasterAnalysis.whereFasterTable, ...
+        {'scope','metric','dycOffValue','dycOnValue','delta','unit','supportsDyc','interpretation'})
+    "</section>"
+];
+end
+
 function line = localEffectivenessMetricLine(label, summary, metricName, metrics, deltaName, suffix, interpretation)
 offValue = localSummaryValue(summary, "dyc_off", metricName);
 onValue = localSummaryValue(summary, "dyc_on", metricName);
@@ -552,17 +627,63 @@ end
 html = [html; "</section>"];
 end
 
-function html = localDataArtifactsHtml(analysisArtifacts)
+function html = localPresentationPlotSectionHtml(plotManifest)
+html = [
+    "<h2>展示版图表</h2>"
+    "<section class=""card"">"
+];
+
+if isempty(plotManifest) || height(plotManifest) == 0 || ~ismember('available', plotManifest.Properties.VariableNames)
+    html = [
+        html
+        "<p>当前未生成展示版图表。</p>"
+        "</section>"
+    ];
+    return;
+end
+
+availableRows = plotManifest(plotManifest.available, :);
+if height(availableRows) == 0
+    html = [
+        html
+        "<p>展示版图表未生成。可检查 signal_data/aligned_dyc_comparison.csv 与 comparison_metrics.csv 是否完整。</p>"
+        "</section>"
+    ];
+    return;
+end
+
+html = [
+    html
+    "<p>以下图表由 MATLAB 从报告结果目录重新绘制，适合直接用于汇报展示。</p>"
+];
+for idx = 1:height(availableRows)
+    html = [
+        html
+        "<figure>"
+        "<figcaption>" + localEscape(availableRows.title(idx)) + "</figcaption>"
+        "<img src=""" + localEscape(availableRows.relativePath(idx)) + """ alt=""" + localEscape(availableRows.title(idx)) + """>"
+        "</figure>"
+    ]; %#ok<AGROW>
+end
+
+html = [html; "</section>"];
+end
+
+function html = localDataArtifactsHtml(analysisArtifacts, whereFasterAnalysis, plotManifest)
 html = [
     "<h2>可复用数据文件</h2>"
     "<section class=""card"">"
-    "<p>本次仿真提取出的时序数据已单独导出，可直接用 MATLAB、Python、Excel 或其他工具继续做后处理。原始 case 时序、对齐后的 dyc_on - dyc_off 对比数据和 MAT 数据包都保存在 signal_data 目录。</p>"
+    "<p>本次仿真提取出的时序数据已单独导出，可直接用 MATLAB、Python、Excel 或其他工具继续做后处理。原始 case 时序、对齐后的 dyc_on - dyc_off 对比数据、MAT 数据包和“快在哪里”分析都保存在结果目录。</p>"
 ];
 
 artifactTable = table( ...
-    ["信号清单"; "对齐对比数据"; "MAT 数据包"], ...
-    [analysisArtifacts.manifestRelativePath; analysisArtifacts.alignedComparisonRelativePath; analysisArtifacts.analysisDataMatRelativePath], ...
-    ["每个 case/repeat 的导出状态、来源和行数"; "按 dyc_off 时间轴插值对齐后的时序差值"; "manifest、alignedComparison 和 timeSeriesTables"], ...
+    ["信号清单"; "对齐对比数据"; "MAT 数据包"; "快在哪里分析表"; "快在哪里文字分析"; "展示版图表清单"], ...
+    [analysisArtifacts.manifestRelativePath; analysisArtifacts.alignedComparisonRelativePath; ...
+    analysisArtifacts.analysisDataMatRelativePath; localRelativeArtifactPath(whereFasterAnalysis, 'whereFasterPath'); ...
+    localRelativeArtifactPath(whereFasterAnalysis, 'analysisTextPath'); localPresentationManifestRelativePath(plotManifest)], ...
+    ["每个 case/repeat 的导出状态、来源和行数"; "按 dyc_off 时间轴插值对齐后的时序差值"; ...
+    "manifest、alignedComparison 和 timeSeriesTables"; "完成时间、速度、路径误差、横摆力矩和轮胎利用率的可读汇总"; ...
+    "与 HTML/effectiveness_analysis.txt 复用的自动结论"; "plots_presentation 目录中的展示版 PNG 清单"], ...
     'VariableNames', {'artifact','relativePath','description'});
 
 if isfield(analysisArtifacts, 'timeSeriesTables') && ~isempty(analysisArtifacts.timeSeriesTables)
@@ -581,6 +702,34 @@ html = [
     localTableToHtml(artifactTable, artifactTable.Properties.VariableNames)
     "</section>"
 ];
+end
+
+function relativePath = localRelativeArtifactPath(analysis, fieldName)
+relativePath = "unavailable";
+if ~isstruct(analysis) || ~isfield(analysis, fieldName)
+    return;
+end
+pathText = string(analysis.(fieldName));
+if contains(pathText, "autocross_where_faster.csv")
+    relativePath = "autocross_where_faster.csv";
+elseif contains(pathText, "autocross_where_faster_analysis.txt")
+    relativePath = "autocross_where_faster_analysis.txt";
+elseif strlength(pathText) > 0
+    relativePath = pathText;
+end
+end
+
+function relativePath = localPresentationManifestRelativePath(plotManifest)
+relativePath = "plots_presentation/presentation_plot_manifest.csv";
+if isempty(plotManifest) || height(plotManifest) == 0
+    return;
+end
+if ismember('relativePath', plotManifest.Properties.VariableNames) && any(strlength(plotManifest.relativePath) > 0)
+    return;
+end
+if ismember('fileName', plotManifest.Properties.VariableNames) && any(plotManifest.fileName == "presentation_plot_manifest.csv")
+    return;
+end
 end
 
 function html = localInterventionHtml(metrics)
