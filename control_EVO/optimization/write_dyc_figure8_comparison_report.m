@@ -45,26 +45,27 @@ html = [
     "</head>"
     "<body><main>"
     "<h1>" + localEscape(cfg.reportTitle) + "</h1>"
+    localOverviewHtml(cfg)
     localConclusionHtml(metrics)
-    localAnalysisHtml(analysisLines)
+    localReportContentsHtml()
     localWhereFasterHtml(whereFasterAnalysis)
     "<h2>关键指标</h2>"
-    localTableToHtml(metrics.summary, metrics.summary.Properties.VariableNames)
+    localTableToHtml(localSelectedMetricsTable(metrics.summary), {'metric','dycOffValue','dycOnValue','delta','unit'})
     "<h2>八字绕环左右转/换向分段指标</h2>"
     "<section class=""card"">"
-    "<p>下表按八字绕环的左转、右转和换向过渡区分别统计路径误差、速度保持、轮胎利用率、横摆力矩和四轮驱动矩离散度。</p>"
+    "<p>保留左转、右转和换向过渡区的分段差值，便于定位收益来源。</p>"
     localTableToHtml(metrics.figure8SegmentDelta, metrics.figure8SegmentDelta.Properties.VariableNames)
     "</section>"
     localPlotHtml(plotManifest)
-    "<h2>可复用数据文件</h2>"
+    "<h2>输出文件</h2>"
     "<section class=""card"">"
-    "<p>原始 case 时序、对齐后的 dyc_on - dyc_off 对比数据、MAT 数据包以及八字绕环分段指标均已单独落盘，可继续用 MATLAB、Python 或 Excel 后处理。</p>"
+    "<p>报告、表格、MAT 数据包和图表均保存在本次结果目录下。</p>"
     localArtifactHtml(analysisArtifacts, cfg)
     "</section>"
     "<h2>运行证据</h2>"
     localTableToHtml(metrics.perRun, {'caseId','repeatIndex','status','lapTime_s','stopReason','failureReason','lastRunLogPath','lastRunEndPath'})
     "<h2>验证边界</h2>"
-    "<section class=""card""><p>本结果只代表当前离线 Simulink/CarSim 协同仿真上下文中的八字绕环对比输出，不代表 DIL、实时硬件或实车验证结论。</p></section>"
+    "<section class=""card""><p>本报告仅代表当前 CarSim/Simulink 离线仿真结果，不代表 DIL、实时硬件或实车验证。</p></section>"
     "</main></body></html>"
 ];
 localWriteTextFile(cfg.reportPath, html);
@@ -74,9 +75,21 @@ function html = localWhereFasterHtml(whereFasterAnalysis)
 html = [
     "<h2>快在哪里</h2>"
     "<section class=""card"">"
-    "<p>下表从已导出的 CSV 中汇总 DYC 开启后相对关闭状态的变化。delta 均为 dyc_on - dyc_off。</p>"
+    "<p>delta 均为 dyc_on - dyc_off。</p>"
     localTableToHtml(whereFasterAnalysis.whereFasterTable, ...
-        {'scope','metric','dycOffValue','dycOnValue','delta','unit','supportsDyc','interpretation'})
+        {'metric','dycOffValue','dycOnValue','delta','unit','interpretation'})
+    "</section>"
+];
+end
+
+function html = localOverviewHtml(cfg)
+html = [
+    "<h2>报告概览</h2>"
+    "<section class=""card"">"
+    "<div>工况：" + localEscape(localNestedField(cfg, {'scenario','displayName'})) + "</div>"
+    "<div>dyc_off：Kp/Ki/Kd = 0/0/0</div>"
+    "<div>dyc_on：Kp/Ki/Kd = 6000/200/0</div>"
+    "<div>结果目录：" + localEscape(localField(cfg, 'resultsDir')) + "</div>"
     "</section>"
 ];
 end
@@ -85,9 +98,8 @@ function html = localConclusionHtml(metrics)
 comparison = metrics.comparison;
 evidence = metrics.figure8Evidence;
 html = [
-    "<h2>结论</h2>"
+    "<h2>核心结论</h2>"
     "<section class=""card"">"
-    "<p>本报告采用双主线判断 DYC 有效性：完成时间/圈速改善 + 连续左右转向下的稳定性证据链。</p>"
 ];
 if string(comparison.status) == "valid"
     html = [
@@ -103,6 +115,57 @@ else
     ];
 end
 html = [html; "</section>"];
+end
+
+function html = localReportContentsHtml()
+items = [
+    "完成时间与圈速差"
+    "整体速度、路径误差和轮胎利用率"
+    "左转、右转、换向过渡区分段差值"
+    "横摆力矩介入与驱动矩分配"
+    "展示图与导出文件索引"
+];
+html = [
+    "<h2>报告提供的信息</h2>"
+    "<section class=""card""><ul>"
+];
+for idx = 1:numel(items)
+    html = [html; "<li>" + localEscape(items(idx)) + "</li>"]; %#ok<AGROW>
+end
+html = [html; "</ul></section>"];
+end
+
+function tbl = localSelectedMetricsTable(summary)
+specs = [
+    struct('label', "完成时间", 'field', "lapTime_s", 'unit', "s")
+    struct('label', "平均速度", 'field', "meanSpeed_mps", 'unit', "m/s")
+    struct('label', "最低速度", 'field', "minSpeed_mps", 'unit', "m/s")
+    struct('label', "路径误差 RMSE", 'field', "lateralErrorRmse", 'unit', "m")
+    struct('label', "轮胎峰值利用率", 'field', "tireUtilPeak", 'unit', "")
+    struct('label', "横摆力矩峰值", 'field', "mzPeakAbs_Nm", 'unit', "Nm")
+    struct('label', "控制介入占比", 'field', "interventionRatio", 'unit', "")
+];
+tbl = table('Size', [0 5], ...
+    'VariableTypes', {'string','double','double','double','string'}, ...
+    'VariableNames', {'metric','dycOffValue','dycOnValue','delta','unit'});
+for idx = 1:numel(specs)
+    off = localSummaryValue(summary, "dyc_off", specs(idx).field);
+    on = localSummaryValue(summary, "dyc_on", specs(idx).field);
+    tbl = [tbl; table(specs(idx).label, off, on, on - off, specs(idx).unit, ...
+        'VariableNames', tbl.Properties.VariableNames)]; %#ok<AGROW>
+end
+end
+
+function value = localSummaryValue(summary, caseId, fieldName)
+value = NaN;
+if ~ismember(fieldName, summary.Properties.VariableNames)
+    return;
+end
+row = summary(string(summary.caseId) == string(caseId), :);
+if height(row) ~= 1
+    return;
+end
+value = double(row.(fieldName)(1));
 end
 
 function lines = localAnalysisLines(cfg, metrics, analysisArtifacts)
@@ -188,24 +251,25 @@ end
 
 function html = localArtifactHtml(analysisArtifacts, cfg)
 tbl = table( ...
-    ["信号清单"; "对齐对比数据"; "MAT 数据包"; "八字分段指标"; "八字分段差值"; "快在哪里分析表"; "快在哪里文字分析"], ...
-    [localArtifactField(analysisArtifacts, 'manifestRelativePath'); ...
+    ["HTML 报告"; "指标汇总"; "单次运行"; "信号清单"; "对齐对比数据"; "MAT 数据包"; "八字分段指标"; "八字分段差值"; "快在哪里分析表"; "快在哪里文字分析"; "展示图清单"], ...
+    ["report.html"; "comparison_metrics.csv"; "run_results.csv"; ...
+    localArtifactField(analysisArtifacts, 'manifestRelativePath'); ...
     localArtifactField(analysisArtifacts, 'alignedComparisonRelativePath'); ...
     localArtifactField(analysisArtifacts, 'analysisDataMatRelativePath'); ...
     "figure8_segment_metrics.csv"; "figure8_segment_delta.csv"; ...
-    "figure8_where_faster.csv"; "figure8_where_faster_analysis.txt"], ...
-    ["每个 case/repeat 的导出状态、来源和行数"; ...
+    "figure8_where_faster.csv"; "figure8_where_faster_analysis.txt"; ...
+    "plots_presentation/presentation_plot_manifest.csv"], ...
+    ["当前仪表盘页面"; "dyc_off/dyc_on 核心指标"; "每次运行状态和停止原因"; ...
+    "每个 case/repeat 的导出状态、来源和行数"; ...
     "按 dyc_off 时间轴插值对齐后的时序差值"; ...
     "manifest、alignedComparison、timeSeriesTables 和 artifacts"; ...
     "左转、右转、换向过渡区的分段统计"; ...
     "dyc_on - dyc_off 的分段差值"; ...
     "完成时间、速度、路径误差、轮胎利用率和横摆力矩的可读汇总"; ...
-    "与 HTML 报告复用的自动文字结论"], ...
+    "精简文字结论"; ...
+    "plots_presentation 目录中的展示版 PNG 清单"], ...
     'VariableNames', {'artifact','relativePath','description'});
 html = localTableToHtml(tbl, tbl.Properties.VariableNames);
-if isfield(cfg, 'figure8') && isfield(cfg.figure8, 'presentationPlotManifestPath')
-    html = [html; "<p>展示图清单：" + localEscape(cfg.figure8.presentationPlotManifestPath) + "</p>"];
-end
 end
 
 function html = localTableToHtml(tbl, columns)

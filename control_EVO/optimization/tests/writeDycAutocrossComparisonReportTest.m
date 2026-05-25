@@ -45,31 +45,26 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
 
             html = fileread(reportPath);
             testCase.verifyTrue(contains(html, 'DYC Autocross 有无控制对比报告'));
-            testCase.verifyTrue(contains(html, '圈速差值'));
-            testCase.verifyTrue(contains(html, '机理解释'));
-            testCase.verifyTrue(contains(html, '详细有效性分析'));
-            testCase.verifyTrue(contains(html, '双主线结论'));
+            testCase.verifyTrue(contains(html, '报告概览'));
+            testCase.verifyTrue(contains(html, '核心结论'));
+            testCase.verifyTrue(contains(html, '报告提供的信息'));
+            testCase.verifyTrue(contains(html, '关键指标'));
             testCase.verifyTrue(contains(html, '快在哪里'));
-            testCase.verifyTrue(contains(html, 'autocross_where_faster.csv'));
-            testCase.verifyTrue(contains(html, '验证边界'));
-            testCase.verifyTrue(contains(html, 'effectiveness_analysis.txt'));
-            testCase.verifyTrue(contains(html, '机理指标差值'));
-            testCase.verifyTrue(contains(html, 'yawRateRmseDelta'));
-            testCase.verifyTrue(contains(html, 'interventionRatioDelta'));
-            testCase.verifyTrue(contains(html, '数据分析图'));
-            testCase.verifyTrue(contains(html, '速度对比'));
-            testCase.verifyTrue(contains(html, '横摆角速度对比'));
-            testCase.verifyTrue(contains(html, '横摆误差对比'));
-            testCase.verifyTrue(contains(html, '路径误差对比'));
-            testCase.verifyTrue(contains(html, '横摆力矩对比'));
-            testCase.verifyTrue(contains(html, 'plots/speed_comparison.png'));
-            testCase.verifyTrue(contains(html, '展示版图表'));
-            testCase.verifyTrue(contains(html, 'plots_presentation/presentation_plot_manifest.csv'));
-            testCase.verifyTrue(contains(html, '控制介入'));
-            testCase.verifyTrue(contains(html, '可复用数据文件'));
-            testCase.verifyTrue(contains(html, 'signal_data/aligned_dyc_comparison.csv'));
+            testCase.verifyTrue(contains(html, '展示图'));
+            testCase.verifyTrue(contains(html, '输出文件'));
             testCase.verifyTrue(contains(html, '运行证据'));
             testCase.verifyTrue(contains(html, '验证边界'));
+            testCase.verifyTrue(contains(html, 'dyc_off'));
+            testCase.verifyTrue(contains(html, 'dyc_on'));
+            testCase.verifyTrue(contains(html, 'autocross_where_faster.csv'));
+            testCase.verifyTrue(contains(html, 'effectiveness_analysis.txt'));
+            testCase.verifyTrue(contains(html, 'plots_presentation/presentation_plot_manifest.csv'));
+            testCase.verifyTrue(contains(html, 'signal_data/aligned_dyc_comparison.csv'));
+            testCase.verifyFalse(contains(html, '详细有效性分析'));
+            testCase.verifyFalse(contains(html, '机理解释'));
+            testCase.verifyFalse(contains(html, '机理指标差值'));
+            testCase.verifyFalse(contains(html, '<h2>控制介入</h2>'));
+            testCase.verifyFalse(contains(html, 'plots/speed_comparison.png'));
 
             comparisonMetrics = readtable(comparisonMetricsPath, 'TextType', 'string');
             perRun = readtable(runResultsPath, 'TextType', 'string');
@@ -84,12 +79,12 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(all(ismember({'time_s','speed_mps','lateralError_m','tireUtilMax','wheelTorqueSpread_Nm'}, offSignals.Properties.VariableNames)));
             testCase.verifyTrue(all(ismember({'time_s','speed_mps_dyc_off','speed_mps_dyc_on','speed_mps_delta','lateralError_m_delta','tireUtilMax_delta','wheelTorqueSpread_Nm_delta'}, aligned.Properties.VariableNames)));
             testCase.verifyTrue(contains(analysisText, 'Autocross DYC 有效性分析'));
-            testCase.verifyTrue(contains(analysisText, '圈速'));
+            testCase.verifyTrue(contains(analysisText, '总体判断'));
             testCase.verifyTrue(contains(analysisText, '快在哪里'));
-            testCase.verifyTrue(contains(analysisText, '路径误差'));
-            testCase.verifyTrue(contains(analysisText, '横摆力矩'));
-            testCase.verifyTrue(contains(analysisText, '轮胎峰值利用率'));
+            testCase.verifyTrue(contains(analysisText, '主要风险'));
+            testCase.verifyTrue(contains(analysisText, '输出文件'));
             testCase.verifyTrue(contains(analysisText, '验证边界'));
+            testCase.verifyFalse(contains(analysisText, '数据解读'));
             testCase.verifyTrue(any(whereFaster.scope == "overall"));
             testCase.verifyTrue(any(whereFaster.scope == "path_tracking"));
             testCase.verifyPlotFile(cfg.resultsDir, 'speed_comparison.png');
@@ -147,7 +142,7 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             write_dyc_autocross_comparison_report(cfg, runResults, metrics);
 
             html = fileread(fullfile(cfg.resultsDir, 'report.html'));
-            testCase.verifyTrue(contains(html, '不输出 DYC 有效性结论'));
+            testCase.verifyTrue(contains(html, '当前数据不输出完成时间结论'));
         end
 
         function testReportPlotsSignalDataFromInvalidRuns(testCase)
@@ -170,10 +165,11 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_rate_comparison.png');
             testCase.verifyPlotFile(cfg.resultsDir, 'yaw_error_comparison.png');
             html = fileread(cfg.reportPath);
-            testCase.verifyTrue(contains(html, 'plots/speed_comparison.png'));
+            testCase.verifyTrue(contains(html, '输出文件'));
+            testCase.verifyFalse(contains(html, 'plots/speed_comparison.png'));
         end
 
-        function testControlInterventionAvailabilityUsesDycOnOnly(testCase)
+        function testLightweightReportOmitsControlInterventionLongSection(testCase)
             fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
             cfg = localConfig(fixture.Folder);
             offRun = localRun("dyc_off", "DYC 关闭", 1, 62.0, ...
@@ -186,7 +182,8 @@ classdef writeDycAutocrossComparisonReportTest < matlab.unittest.TestCase
             write_dyc_autocross_comparison_report(cfg, runResults, metrics);
 
             html = fileread(fullfile(cfg.resultsDir, 'report.html'));
-            testCase.verifyTrue(contains(html, '控制介入信号不可用'));
+            testCase.verifyTrue(contains(html, '核心结论'));
+            testCase.verifyFalse(contains(html, '控制介入信号不可用'));
             testCase.verifyFalse(contains(html, '下表列出 dyc_on 的横摆力矩'));
         end
     end

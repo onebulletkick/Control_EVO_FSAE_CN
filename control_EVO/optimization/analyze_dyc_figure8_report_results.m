@@ -177,21 +177,21 @@ stabilityConclusion = localStabilityConclusion(whereFasterTable, tirePeakDelta);
 lines = [
     "八字绕环 DYC 有效性分析"
     ""
-    "1. 双主线结论"
-    "完成时间：dyc_on - dyc_off = " + localSignedValue(lapDelta, " s") + "（" + localSignedValue(lapPct, " %") + "）。"
     "总体判断：" + timeConclusion + "，" + stabilityConclusion
     ""
-    "2. 快在哪里"
-    "- 整体平均速度变化：" + localSignedValue(meanSpeedDelta, " m/s") + "。"
-    "- 右转段平均速度变化：" + localSignedValue(rightMeanSpeedDelta, " m/s") + "，最低速度变化：" + localSignedValue(rightMinSpeedDelta, " m/s") + "。"
-    "- 换向过渡区平均速度变化：" + localSignedValue(transitionMeanSpeedDelta, " m/s") + "，路径误差 RMSE 变化：" + localSignedValue(transitionLatDelta, " m") + "。"
+    "完成时间：dyc_on - dyc_off = " + localSignedValue(lapDelta, " s") + "（" + localSignedValue(lapPct, " %") + "）。"
     ""
-    "3. 数据解读"
-    localBestSupportedRows(whereFasterTable)
-    "- 若轮胎峰值利用率或最低速度局部变差，应写成混合证据，不写成全面稳定性提升。"
+    "快在哪里：整体平均速度 " + localSignedValue(meanSpeedDelta, " m/s") + ...
+        "；右转段平均速度 " + localSignedValue(rightMeanSpeedDelta, " m/s") + ...
+        "；右转段最低速度 " + localSignedValue(rightMinSpeedDelta, " m/s") + ...
+        "；换向过渡区平均速度 " + localSignedValue(transitionMeanSpeedDelta, " m/s") + ...
+        "；换向过渡区路径误差 RMSE " + localSignedValue(transitionLatDelta, " m") + "。"
     ""
-    "4. 验证边界"
-    "本结论来自当前八字绕环 CarSim/Simulink 联合仿真，不代表 DIL、实时硬件或实车验证。"
+    "主要风险：轮胎峰值利用率可能存在分段混合结果，需结合 figure8_segment_delta.csv 查看左转、右转和换向过渡区。"
+    ""
+    "输出文件：report.html；comparison_metrics.csv；figure8_segment_delta.csv；figure8_where_faster.csv；plots_presentation/presentation_plot_manifest.csv。"
+    ""
+    "验证边界：本报告仅代表当前 CarSim/Simulink 离线仿真结果，不代表 DIL、实时硬件或实车验证。"
 ];
 end
 

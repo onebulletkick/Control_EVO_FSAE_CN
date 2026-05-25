@@ -53,16 +53,12 @@ html = [
     "<h1>DYC Autocross 有无控制对比报告</h1>"
     localExperimentSummaryHtml(cfg)
     localConclusionHtml(summary, comparison)
-    localDetailedEffectivenessHtml(cfg, analysisLines)
+    localReportContentsHtml()
     localWhereFasterHtml(whereFasterAnalysis)
     "<h2>关键指标</h2>"
-    localTableToHtml(summary, summary.Properties.VariableNames)
-    localMechanismHtml()
-    localMechanismDeltaHtml(metrics)
-    localPlotSectionHtml(plotItems)
+    localTableToHtml(localSelectedMetricsTable(summary), {'metric','dycOffValue','dycOnValue','delta','unit'})
     localPresentationPlotSectionHtml(plotManifest)
     localDataArtifactsHtml(analysisArtifacts, whereFasterAnalysis, plotManifest)
-    localInterventionHtml(metrics)
     "<h2>运行证据</h2>"
     localTableToHtml(perRun, {'caseId','repeatIndex','status','lapTime_s','stopReason','failureReason','lastRunLogPath','lastRunEndPath'})
     localBoundaryHtml()
@@ -363,9 +359,12 @@ end
 
 function html = localExperimentSummaryHtml(cfg)
 html = [
-    "<h2>实验摘要</h2>"
+    "<h2>报告概览</h2>"
     "<section class=""card grid"">"
+    "<div class=""label"">工况</div><div>" + localEscape(localNestedField(cfg, {'scenario','displayName'})) + "</div>"
     "<div class=""label"">modelName</div><div>" + localEscape(localField(cfg, 'modelName')) + "</div>"
+    "<div class=""label"">dyc_off</div><div>Kp/Ki/Kd = 0/0/0</div>"
+    "<div class=""label"">dyc_on</div><div>Kp/Ki/Kd = 6000/200/0</div>"
     "<div class=""label"">simfilePath</div><div>" + localEscape(localField(cfg, 'simfilePath')) + "</div>"
     "<div class=""label"">stopTime</div><div>" + localEscape(localNestedField(cfg, {'simulation','stopTime'})) + "</div>"
     "<div class=""label"">repeatCount</div><div>" + localEscape(localField(cfg, 'repeatCount')) + "</div>"
@@ -376,7 +375,7 @@ end
 
 function html = localConclusionHtml(summary, comparison)
 html = [
-    "<h2>结论</h2>"
+    "<h2>核心结论</h2>"
     "<section class=""card"">"
 ];
 
@@ -387,93 +386,89 @@ if string(comparison.status) == "valid"
     pct = comparison.lapTimeDelta_pct;
     html = [
         html
-        "<p class=""ok"">comparison.status = valid</p>"
-        "<p>DYC 关闭圈速：" + localFormatValue(offLap, " s") + "；DYC 开启圈速：" + localFormatValue(onLap, " s") + "；圈速差值：" + localFormatSignedValue(delta, " s") + "（" + localFormatSignedValue(pct, " %") + "）。</p>"
+        "<p class=""ok"">完成时间有效。dyc_on - dyc_off = " + localFormatSignedValue(delta, " s") + "（" + localFormatSignedValue(pct, " %") + "）。</p>"
+        "<p>DYC 关闭：" + localFormatValue(offLap, " s") + "；DYC 开启：" + localFormatValue(onLap, " s") + "。</p>"
     ];
 else
     reason = localEscape(localStringValue(comparison.failureReason));
     html = [
         html
-        "<p class=""warn"">comparison.status = invalid</p>"
-        "<p>当前数据不输出 DYC 有效性结论。原因：" + reason + "</p>"
+        "<p class=""warn"">当前数据不输出完成时间结论。原因：" + reason + "</p>"
     ];
 end
 
 html = [html; "</section>"];
 end
 
+function html = localReportContentsHtml()
+items = [
+    "圈速与完成时间差"
+    "平均/最低速度保持"
+    "路径误差与横摆误差"
+    "横摆力矩介入"
+    "轮胎利用率"
+    "驱动矩分配"
+    "展示图与导出文件索引"
+];
+html = [
+    "<h2>报告提供的信息</h2>"
+    "<section class=""card""><ul>"
+];
+for idx = 1:numel(items)
+    html = [html; "<li>" + localEscape(items(idx)) + "</li>"]; %#ok<AGROW>
+end
+html = [html; "</ul></section>"];
+end
+
+function tbl = localSelectedMetricsTable(summary)
+specs = [
+    struct('label', "完成时间", 'field', "lapTime_s", 'unit', "s")
+    struct('label', "平均速度", 'field', "meanSpeed_mps", 'unit', "m/s")
+    struct('label', "最低速度", 'field', "minSpeed_mps", 'unit', "m/s")
+    struct('label', "路径误差 RMSE", 'field', "lateralErrorRmse", 'unit', "m")
+    struct('label', "横摆误差 RMSE", 'field', "yawRateRmse", 'unit', "rad/s")
+    struct('label', "轮胎峰值利用率", 'field', "tireUtilPeak", 'unit', "")
+    struct('label', "横摆力矩峰值", 'field', "mzPeakAbs_Nm", 'unit', "Nm")
+    struct('label', "驱动矩离散度峰值", 'field', "wheelTorqueSpreadPeak_Nm", 'unit', "Nm")
+];
+tbl = table('Size', [0 5], ...
+    'VariableTypes', {'string','double','double','double','string'}, ...
+    'VariableNames', {'metric','dycOffValue','dycOnValue','delta','unit'});
+for idx = 1:numel(specs)
+    off = localSummaryValue(summary, "dyc_off", specs(idx).field);
+    on = localSummaryValue(summary, "dyc_on", specs(idx).field);
+    tbl = [tbl; table(specs(idx).label, off, on, on - off, specs(idx).unit, ...
+        'VariableNames', tbl.Properties.VariableNames)]; %#ok<AGROW>
+end
+end
+
 function lines = localEffectivenessAnalysisLines(cfg, metrics, analysisArtifacts)
 summary = metrics.summary;
 comparison = metrics.comparison;
-
-offLap = localSummaryValue(summary, "dyc_off", "lapTime_s");
-onLap = localSummaryValue(summary, "dyc_on", "lapTime_s");
-
-lines = [
-    "详细 DYC 有效性分析"
-    ""
-    "1. 有效性判断"
-];
-
 if string(comparison.status) == "valid"
     lapDelta = double(comparison.lapTimeDelta_s);
     lapPct = double(comparison.lapTimeDelta_pct);
-    if isfinite(lapDelta) && lapDelta < 0
-        verdict = "当前单次 Autocross 仿真支持 DYC 有效：DYC 开启后圈速缩短，同时需要结合横向路径误差、速度保持、横摆力矩和轮胎利用率判断收益来源。";
-    elseif isfinite(lapDelta) && lapDelta > 0
-        verdict = "当前单次 Autocross 仿真不支持 DYC 带来圈速收益：DYC 开启后圈速变慢，需要继续检查控制介入是否过强、轮胎利用率是否恶化或速度保持是否受损。";
-    else
-        verdict = "当前单次 Autocross 仿真圈速差值接近零，不能只凭圈速判断 DYC 是否有效，需要依赖机理指标继续分析。";
-    end
-    lines = [
-        lines
-        verdict
-        "圈速：dyc_off = " + localFormatValue(offLap, " s") + "，dyc_on = " + localFormatValue(onLap, " s") + "，dyc_on - dyc_off = " + localFormatSignedValue(lapDelta, " s") + "（" + localFormatSignedValue(lapPct, " %") + "）。"
-    ];
+    verdict = "完成时间可用";
 else
-    lines = [
-        lines
-        "当前数据不输出 DYC 有效性结论，因为 comparison.status = invalid。"
-        "失败原因：" + localStringValue(comparison.failureReason)
-        "圈速：dyc_off = " + localFormatValue(offLap, " s") + "，dyc_on = " + localFormatValue(onLap, " s") + "。"
-    ];
+    lapDelta = NaN;
+    lapPct = NaN;
+    verdict = "完成时间不可用：" + localStringValue(comparison.failureReason);
 end
 
 lines = [
-    lines
+    "Autocross DYC 有效性分析"
     ""
-    "2. 独立后处理数据"
-    "本次数据不是只写进 HTML，而是单独落盘，后续可用 MATLAB、Python 或 Excel 继续处理。"
-    "- 指标汇总表：" + localStringValue(localField(cfg, 'comparisonMetricsPath'))
-    "- 单次运行表：" + localStringValue(localField(cfg, 'runResultsPath'))
-    "- 时序清单：" + localArtifactField(analysisArtifacts, 'manifestRelativePath')
-    "- 对齐后的 dyc_on - dyc_off 时序差值：" + localArtifactField(analysisArtifacts, 'alignedComparisonRelativePath')
-    "- MAT 数据包：" + localArtifactField(analysisArtifacts, 'analysisDataMatRelativePath')
+    "总体判断：" + verdict
     ""
-    "3. 机理证据链"
-    localEffectivenessMetricLine("横向路径误差 RMSE", summary, "lateralErrorRmse", metrics, "lateralErrorRmseDelta", " m", "负值表示 DYC 开启后车辆横向位置更接近目标轨迹。")
-    localEffectivenessMetricLine("速度保持均值", summary, "meanSpeed_mps", metrics, "meanSpeedDelta_mps", " m/s", "正值表示 DYC 没有通过明显牺牲平均速度换取稳定性。")
-    localEffectivenessMetricLine("最低速度", summary, "minSpeed_mps", metrics, "minSpeedDelta_mps", " m/s", "正值通常意味着弯中或低速段速度保持更好。")
-    localEffectivenessMetricLine("油门均值", summary, "throttleMean", metrics, "throttleMeanDelta", "", "若速度提升同时油门均值下降，说明收益更可能来自姿态/路径效率而非单纯加大油门。")
-    localEffectivenessMetricLine("轮胎利用率峰值", summary, "tireUtilPeak", metrics, "tireUtilPeakDelta", "", "负值表示最大轮胎合力利用率下降，说明峰值饱和风险降低；该值来自 CarSim 导出 Fx/Fy/Fz 后处理。")
-    localEffectivenessMetricLine("四轮驱动矩离散度峰值", summary, "wheelTorqueSpreadPeak_Nm", metrics, "wheelTorqueSpreadPeakDelta_Nm", " Nm", "正值表示控制器通过左右/前后轮驱动矩差异制造附加横摆力矩。")
-    localEffectivenessMetricLine("横摆力矩峰值", summary, "mzPeakAbs_Nm", metrics, "mzPeakAbsDelta_Nm", " Nm", "正值表示 DYC 实际输出了更强的横摆修正能力。")
-    localEffectivenessMetricLine("横摆力矩绝对积分", summary, "mzAbsIntegral_Nms", metrics, "mzAbsIntegralDelta_Nms", " Nms", "正值表示整圈控制介入总量增加。")
-    localEffectivenessMetricLine("控制介入占比", summary, "interventionRatio", metrics, "interventionRatioDelta", "", "正值表示 DYC 在更多时间片超过横摆力矩有效阈值。")
+    "完成时间：dyc_on - dyc_off = " + localFormatSignedValue(lapDelta, " s") + "（" + localFormatSignedValue(lapPct, " %") + "）。"
     ""
-    "4. 为什么 DYC 有效"
-    "DYC 的直接作用不是增加整车总驱动力，而是通过四轮驱动矩差异形成附加横摆力矩，让车辆横摆响应更接近目标。"
-    "如果圈速缩短、横向路径误差下降、速度保持没有恶化，同时横摆力矩和四轮驱动矩离散度明显增加，就能形成一条较完整的有效性证据链：控制器介入 -> 姿态/路径改善 -> 弯中或出弯效率提升 -> 圈速改善。"
-    "轮胎利用率用于解释收益是否来自更合理的轮胎负荷分配。如果 DYC 开启后峰值利用率下降或没有恶化，说明控制器没有单纯把车辆推向更强饱和。"
+    "快在哪里：详见 autocross_where_faster.csv。"
     ""
-    "5. 还能继续分析的数据"
-    "已导出的 aligned_dyc_comparison.csv 还包含 station、speed、yaw-rate、lateral error、Ay/Ax、Mz、throttle、steer、tireUtilMax、wheelTorqueSpread 和 leftRightDriveTorqueDelta 等列，可继续做分段/弯道级分析。"
-    "值得继续深挖的方向包括：按 station 分段统计入口/弯中/出弯速度，统计轮胎利用率超过阈值的持续时间，分析 leftRightDriveTorqueDelta 与 Mz 的对应关系，以及观察油门开度和纵向加速度是否说明 DYC 改善了出弯牵引。"
+    "主要风险：后处理对齐数据不可用时，HTML 仍保留运行证据和基础指标。"
     ""
-    "6. 证据不足与边界"
-    "本结论来自单次 Autocross 仿真或当前 repeat 配置，不等同于统计显著结论；若 repeatCount 增加，应比较均值、标准差和最差圈。"
-    "当前结果只代表离线 Simulink/CarSim 协同仿真，不代表 DIL、实时硬件或实车验证。"
-    "如果 CarSim Export 未包含目标横摆角速度、方向盘转角或更多轮胎通道，相关 yaw tracking、driver demand 和 per-wheel tire saturation 结论只能标记为不可用，不能强行外推。"
+    "输出文件：comparison_metrics.csv；run_results.csv；" + localArtifactField(analysisArtifacts, 'manifestRelativePath') + "；" + localArtifactField(analysisArtifacts, 'analysisDataMatRelativePath') + "。"
+    ""
+    "验证边界：本报告仅代表当前 CarSim/Simulink 离线仿真结果，不代表 DIL、实时硬件或实车验证。"
 ];
 end
 
@@ -522,9 +517,9 @@ end
 
 html = [
     html
-    "<p>下表从已导出的 CSV/MAT 结果中汇总 DYC 开启后相对关闭状态的变化。delta 均为 dyc_on - dyc_off；supportsDyc 表示该分项是否支持 DYC 有效。</p>"
+    "<p>delta 均为 dyc_on - dyc_off。</p>"
     localTableToHtml(whereFasterAnalysis.whereFasterTable, ...
-        {'scope','metric','dycOffValue','dycOnValue','delta','unit','supportsDyc','interpretation'})
+        {'metric','dycOffValue','dycOnValue','delta','unit','interpretation'})
     "</section>"
 ];
 end
@@ -629,7 +624,7 @@ end
 
 function html = localPresentationPlotSectionHtml(plotManifest)
 html = [
-    "<h2>展示版图表</h2>"
+    "<h2>展示图</h2>"
     "<section class=""card"">"
 ];
 
@@ -654,7 +649,7 @@ end
 
 html = [
     html
-    "<p>以下图表由 MATLAB 从报告结果目录重新绘制，适合直接用于汇报展示。</p>"
+    "<p>以下为展示版图表，原始分析图仍保存在 plots/ 目录。</p>"
 ];
 for idx = 1:height(availableRows)
     html = [
@@ -671,19 +666,21 @@ end
 
 function html = localDataArtifactsHtml(analysisArtifacts, whereFasterAnalysis, plotManifest)
 html = [
-    "<h2>可复用数据文件</h2>"
+    "<h2>输出文件</h2>"
     "<section class=""card"">"
-    "<p>本次仿真提取出的时序数据已单独导出，可直接用 MATLAB、Python、Excel 或其他工具继续做后处理。原始 case 时序、对齐后的 dyc_on - dyc_off 对比数据、MAT 数据包和“快在哪里”分析都保存在结果目录。</p>"
+    "<p>报告、表格、MAT 数据包和图表均保存在本次结果目录下。</p>"
 ];
 
 artifactTable = table( ...
-    ["信号清单"; "对齐对比数据"; "MAT 数据包"; "快在哪里分析表"; "快在哪里文字分析"; "展示版图表清单"], ...
-    [analysisArtifacts.manifestRelativePath; analysisArtifacts.alignedComparisonRelativePath; ...
+    ["HTML 报告"; "文字结论"; "指标汇总"; "单次运行"; "信号清单"; "对齐对比数据"; "MAT 数据包"; "快在哪里分析表"; "快在哪里文字分析"; "原始分析图"; "展示图清单"], ...
+    ["report.html"; "effectiveness_analysis.txt"; "comparison_metrics.csv"; "run_results.csv"; ...
+    analysisArtifacts.manifestRelativePath; analysisArtifacts.alignedComparisonRelativePath; ...
     analysisArtifacts.analysisDataMatRelativePath; localRelativeArtifactPath(whereFasterAnalysis, 'whereFasterPath'); ...
-    localRelativeArtifactPath(whereFasterAnalysis, 'analysisTextPath'); localPresentationManifestRelativePath(plotManifest)], ...
-    ["每个 case/repeat 的导出状态、来源和行数"; "按 dyc_off 时间轴插值对齐后的时序差值"; ...
+    localRelativeArtifactPath(whereFasterAnalysis, 'analysisTextPath'); "plots/"; localPresentationManifestRelativePath(plotManifest)], ...
+    ["当前仪表盘页面"; "精简文字结论"; "dyc_off/dyc_on 核心指标"; "每次运行状态和停止原因"; ...
+    "每个 case/repeat 的导出状态、来源和行数"; "按 dyc_off 时间轴插值对齐后的时序差值"; ...
     "manifest、alignedComparison 和 timeSeriesTables"; "完成时间、速度、路径误差、横摆力矩和轮胎利用率的可读汇总"; ...
-    "与 HTML/effectiveness_analysis.txt 复用的自动结论"; "plots_presentation 目录中的展示版 PNG 清单"], ...
+    "精简文字结论"; "原始时序分析 PNG"; "plots_presentation 目录中的展示版 PNG 清单"], ...
     'VariableNames', {'artifact','relativePath','description'});
 
 if isfield(analysisArtifacts, 'timeSeriesTables') && ~isempty(analysisArtifacts.timeSeriesTables)
@@ -773,7 +770,7 @@ function html = localBoundaryHtml()
 html = [
     "<h2>验证边界</h2>"
     "<section class=""card"">"
-    "<p>本结果只代表当前离线 Simulink/CarSim 协同仿真上下文中的对比输出，不代表 DIL、实时硬件或真实车辆验证结论。若要扩展到 DIL 或实车，需要额外的实时性、接口、传感器、执行器和安全边界验证。</p>"
+    "<p>本报告仅代表当前 CarSim/Simulink 离线仿真结果，不代表 DIL、实时硬件或实车验证。</p>"
     "</section>"
 ];
 end

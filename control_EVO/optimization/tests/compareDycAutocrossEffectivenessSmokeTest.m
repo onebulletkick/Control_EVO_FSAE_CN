@@ -29,7 +29,13 @@ classdef compareDycAutocrossEffectivenessSmokeTest < matlab.unittest.TestCase
             testCase.verifyTrue(isfile(fullfile(resultsDir, 'plots_presentation', 'presentation_plot_manifest.csv')));
 
             html = fileread(result.cfg.reportPath);
+            testCase.verifyTrue(contains(html, '报告概览'));
+            testCase.verifyTrue(contains(html, '核心结论'));
+            testCase.verifyTrue(contains(html, '报告提供的信息'));
             testCase.verifyTrue(contains(html, '快在哪里'));
+            testCase.verifyTrue(contains(html, '输出文件'));
+            testCase.verifyFalse(contains(html, '详细有效性分析'));
+            testCase.verifyFalse(contains(html, '机理解释'));
 
             runResultsTable = readtable(result.cfg.runResultsPath, 'TextType', 'string');
             testCase.verifyEqual(sort(runResultsTable.caseId), ["dyc_off"; "dyc_on"]);

@@ -31,19 +31,30 @@ classdef compareDycFigure8EffectivenessSmokeTest < matlab.unittest.TestCase
 
             html = fileread(result.cfg.reportPath);
             testCase.verifyTrue(contains(html, 'DYC 八字绕环有无控制对比报告'));
-            testCase.verifyTrue(contains(html, '双主线'));
+            testCase.verifyTrue(contains(html, '报告概览'));
+            testCase.verifyTrue(contains(html, '核心结论'));
+            testCase.verifyTrue(contains(html, '报告提供的信息'));
+            testCase.verifyTrue(contains(html, '关键指标'));
             testCase.verifyTrue(contains(html, '左转'));
             testCase.verifyTrue(contains(html, '右转'));
             testCase.verifyTrue(contains(html, '换向过渡'));
             testCase.verifyTrue(contains(html, '快在哪里'));
+            testCase.verifyTrue(contains(html, '展示图'));
+            testCase.verifyTrue(contains(html, '输出文件'));
+            testCase.verifyTrue(contains(html, '验证边界'));
             testCase.verifyTrue(contains(html, 'plots_presentation/figure8_left_right_segment_map.png'));
+            testCase.verifyFalse(contains(html, '详细有效性分析'));
+            testCase.verifyFalse(contains(html, '本报告采用双主线'));
             testCase.verifyTrue(isfile(fullfile(resultsDir, 'figure8_where_faster.csv')));
             testCase.verifyTrue(isfile(fullfile(resultsDir, 'figure8_where_faster_analysis.txt')));
 
             analysisText = fileread(fullfile(resultsDir, 'effectiveness_analysis.txt'));
             testCase.verifyTrue(contains(analysisText, '八字绕环 DYC 有效性分析'));
-            testCase.verifyTrue(contains(analysisText, '完成时间'));
+            testCase.verifyTrue(contains(analysisText, '总体判断'));
             testCase.verifyTrue(contains(analysisText, '快在哪里'));
+            testCase.verifyTrue(contains(analysisText, '主要风险'));
+            testCase.verifyTrue(contains(analysisText, '输出文件'));
+            testCase.verifyFalse(contains(analysisText, '数据解读'));
         end
     end
 end

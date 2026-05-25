@@ -188,28 +188,23 @@ mzPeakDelta = localSummaryValue(summary, "dyc_on", "mzPeakAbs_Nm") - ...
 lines = [
     "Autocross DYC 有效性分析"
     ""
-    "1. 双主线结论"
-    "完成时间：dyc_on - dyc_off = " + localSignedValue(lapDelta, " s") + "（" + localSignedValue(lapPct, " %") + "）。"
     "总体判断：" + localTimeConclusion(lapDelta) + "，" + localStabilityConclusion(whereFasterTable, minSpeedDelta, tirePeakDelta)
     ""
-    "2. 快在哪里"
-    "- 整体平均速度变化：" + localSignedValue(meanSpeedDelta, " m/s") + "。"
-    "- 最低速度变化：" + localSignedValue(minSpeedDelta, " m/s") + "。"
-    "- 路径误差 RMSE 变化：" + localSignedValue(latRmseDelta, " m") + "。"
-    "- 横摆误差 RMSE 变化：" + localSignedValue(yawRmseDelta, " rad/s") + "。"
-    "- 轮胎峰值利用率变化：" + localSignedValue(tirePeakDelta, "") + "。"
-    "- 横摆力矩峰值变化：" + localSignedValue(mzPeakDelta, " Nm") + "。"
+    "完成时间：dyc_on - dyc_off = " + localSignedValue(lapDelta, " s") + "（" + localSignedValue(lapPct, " %") + "）。"
     ""
-    "3. 数据解读"
-    localBestSupportedRows(whereFasterTable)
-    "- 若轮胎峰值利用率或最低速度局部变差，应写成混合证据，不写成全面稳定性提升。"
+    "快在哪里：平均速度 " + localSignedValue(meanSpeedDelta, " m/s") + ...
+        "；最低速度 " + localSignedValue(minSpeedDelta, " m/s") + ...
+        "；路径误差 RMSE " + localSignedValue(latRmseDelta, " m") + ...
+        "；横摆误差 RMSE " + localSignedValue(yawRmseDelta, " rad/s") + ...
+        "；横摆力矩峰值 " + localSignedValue(mzPeakDelta, " Nm") + "。"
     ""
-    "4. 运行证据"
-    "- 有效运行数：" + string(sum(string(runResults.status) == "valid")) + " / " + string(height(runResults)) + "。"
-    "- 停止原因：" + localStopReasons(runResults)
+    "主要风险：轮胎峰值利用率变化 " + localSignedValue(tirePeakDelta, "") + ...
+        "；有效运行数 " + string(sum(string(runResults.status) == "valid")) + "/" + string(height(runResults)) + ...
+        "；停止原因 " + localStopReasons(runResults) + "。"
     ""
-    "5. 验证边界"
-    "本结论来自当前 Autocross CarSim/Simulink 联合仿真，不代表 DIL、实时硬件或实车验证。"
+    "输出文件：report.html；comparison_metrics.csv；run_results.csv；signal_data/aligned_dyc_comparison.csv；autocross_where_faster.csv。"
+    ""
+    "验证边界：本报告仅代表当前 CarSim/Simulink 离线仿真结果，不代表 DIL、实时硬件或实车验证。"
 ];
 end
 
