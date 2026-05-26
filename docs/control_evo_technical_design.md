@@ -269,11 +269,15 @@ $$
 
 实现位置：`DYC_1_9_test.slx` 中 `YawMomentControl/PID_YawMomentController`。
 
-### 4.2 PID 参数优化工具
+### 4.2 DYC 自动报告与 PID 参数优化工具
 
-`control_EVO/optimization/` 中的外部 MATLAB 工具用于在固定 CarSim 工况下搜索 PID 参数。默认配置优化 `Kp`、`Ki`、`Kd`，并用 CarSim 停止日志中的停止时间作为目标值。
+`control_EVO/optimization/` 提供两类离线工具：DYC 有无控制报告，以及固定 CarSim 工况下的 PID 参数搜索。
 
-这个工具不改变控制器结构，也不为了候选参数保存主模型。候选仿真通过 `Simulink.SimulationInput` 临时设置 `PID_YawMomentController` 参数，并临时把 `YawMomentControlMode` 切到 PID 分支。优化完成后生成结果目录、`run_log.csv`、`summary.md` 和 `best_pid_set_param.m`，由使用者决定是否手动应用最佳参数。
+自动报告比较 `dyc_off` 与 `dyc_on`，输出 `report.html`、`comparison_metrics.csv`、`run_results.csv`、`*_where_faster.csv`、`signal_data/` 数据包和展示图。Autocross 使用 `run_dyc_autocross_report()`，八字绕环使用 `run_dyc_figure8_report()`。已有结果目录可通过 `analyze_dyc_autocross_report_results(resultsDir)` 或 `analyze_dyc_figure8_report_results(resultsDir)` 重建“快在哪里”分析，不重新仿真。
+
+自动报告不改变控制器结构。先在 CarSim GUI 中选择目标 Run，并执行 `Send to Simulink`；MATLAB 脚本负责 `dyc_off` / `dyc_on` 仿真、圈速提取、指标计算、图表绘制和报告生成。`report.html` 是 HTML 总览页，完整时序和指标数据保存在 CSV/MAT 中。
+
+PID 优化工具不改变控制器结构，也不为了候选参数保存主模型。候选仿真通过 `Simulink.SimulationInput` 临时设置 `PID_YawMomentController` 参数，并临时把 `YawMomentControlMode` 切到 PID 分支。优化完成后生成结果目录、`run_log.csv`、`summary.md` 和 `best_pid_set_param.m`，由使用者决定是否手动应用最佳参数。
 
 默认入口 `optimize_dyc_pid_laptime()` 面向 station-stop 工况；`optimize_dyc_pid_autocross_laptime()` 面向 Autocross 停止事件或外部控制停止的工况。两者的结论都只绑定当前 CarSim Run、`simfile.sim` 和本机 solver/许可证环境。
 
@@ -877,7 +881,7 @@ T_to_CarSim_4w_N_m
 - `EVO_Control_System` 内部主数据流为 `VehicleStateBus -> TargetBus -> YawMomentBus -> TorqueRequestBus / AllocationBus -> ActuatorBus`。
 - 车辆参数统一来自 `DYC_vehicle_params.m`。
 - 当前轮胎控制查表默认使用 `pacejka`，不允许环境变量覆盖。
-- DYC PID 优化工具位于 `control_EVO/optimization/`，通过 `SimulationInput` 临时施加候选参数，不保存 `DYC_1_9_test.slx`。
+- DYC 自动报告与 PID 优化工具位于 `control_EVO/optimization/`；报告工具比较 `dyc_off` / `dyc_on`，优化工具通过 `SimulationInput` 临时施加候选参数，二者都不保存 `DYC_1_9_test.slx`。
 - 当前基础仿真未发现明显问题，项目内已确认这一点。
 
 这里不新增以下结论：
@@ -904,8 +908,8 @@ T_to_CarSim_4w_N_m
 4. 补足工况验证记录
    建议为典型工况保存表格化记录：模型版本、开关选择、停止时间、关键输出、警告、LastRun 文件状态和是否可复现。
 
-5. 把 PID 优化结果当作候选参数
-   `control_EVO/optimization/README.md` 记录了优化器入口和边界。优化结果需要在更多工况、DIL 和实车流程中继续验证，不能只凭固定 CarSim Run 的最优值定版。
+5. 把自动报告和 PID 优化结果当作离线验证材料
+   `control_EVO/optimization/README.md` 记录了自动报告、后处理、优化入口和边界。报告与优化结果需要在更多工况、DIL 和实车流程中继续验证，不能只凭固定 CarSim Run 的对比或最优值定版。
 
 6. 为嵌入式迁移保留接口意识
    当前 Simulink 模型使用 Bus 化结构，后续转 C 或接入主程序时，应保留“状态输入 - 目标生成 - 横摆力矩 - 扭矩请求 - 扭矩分配 - 执行器限幅”的边界。
@@ -922,6 +926,6 @@ T_to_CarSim_4w_N_m
 3. `control_EVO/DYC_vehicle_params.m`：确认统一车辆参数。
 4. `control_EVO/DYC_1_9_test.slx`：查看 Simulink 主模型和 Bus 化结构。
 5. `control_EVO/QP_TorqueDistribution.m`：理解 QP 扭矩分配。
-6. `control_EVO/optimization/README.md`：理解 DYC PID 圈速优化入口和验证边界。
+6. `control_EVO/optimization/README.md`：理解 DYC 自动报告、PID 圈速优化入口和验证边界。
 7. `control_EVO/tire_modeling/README.md`：理解轮胎查表来源和使用边界。
 8. `control_EVO/round9_pacejka_engineering_package/docs/pacejka_round9_usage.md`：理解 Pacejka 工程模型的来源、能力和限制。
