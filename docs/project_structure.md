@@ -1,6 +1,6 @@
 # 项目详细结构说明
 
-本文按 `git ls-files` 的当前跟踪文件整理，用于说明仓库中每个目录、子项目和主要文件的职责。模型文件、脚本、测试和 README 逐项说明；批量图片、图表和模型输出按同质文件组归类说明。
+本文按 `git ls-files` 的跟踪文件整理，记录仓库中各目录、子项目和主要文件的职责。模型文件、脚本、测试和 README 逐项列出；批量图片、图表和模型输出按目录归类。
 
 ## 根目录
 
@@ -52,13 +52,23 @@
 | `control_EVO/DYC_motor_wheel_torque_limit.m` | 电机转速相关的轮端扭矩限制。 |
 | `control_EVO/DYC_apply_motor_limits.m` | 电机限扭、总功率限制和最终输出限幅。 |
 
-### PID 圈速优化工具
+### DYC 自动报告与 PID 圈速优化工具
 
-`control_EVO/optimization/` 是外部 MATLAB 工具目录，用于在固定 CarSim Run 上搜索 DYC PID 参数，不为候选参数保存主模型。
+`control_EVO/optimization/` 是外部 MATLAB 工具目录，用于固定 CarSim Run 下的 DYC 有无控制报告和 DYC PID 参数搜索。报告和优化都不保存主模型，结果产物写入 ignored `control_EVO/optimization/results/`。
 
 | 路径 | 用途 |
 | --- | --- |
-| `control_EVO/optimization/README.md` | 优化器使用说明、入口、输出和边界声明。 |
+| `control_EVO/optimization/README.md` | 自动报告、PID 优化、输出文件和验证边界。 |
+| `control_EVO/optimization/run_dyc_autocross_report.m` | Autocross 一键报告入口，运行 `dyc_off` / `dyc_on` 并生成 HTML、CSV、MAT 和展示图。 |
+| `control_EVO/optimization/run_dyc_figure8_report.m` | 八字绕环一键报告入口，额外生成左转、右转和换向过渡区分段指标。 |
+| `control_EVO/optimization/analyze_dyc_autocross_report_results.m` | 从已有 Autocross 结果目录重建“快在哪里”分析，不重新仿真。 |
+| `control_EVO/optimization/analyze_dyc_figure8_report_results.m` | 从已有八字绕环结果目录重建“快在哪里”分析，不重新仿真。 |
+| `control_EVO/optimization/compare_dyc_autocross_effectiveness.m` | Autocross `dyc_off` / `dyc_on` 对比主流程。 |
+| `control_EVO/optimization/compare_dyc_figure8_effectiveness.m` | 八字绕环 `dyc_off` / `dyc_on` 对比主流程。 |
+| `control_EVO/optimization/write_dyc_autocross_comparison_report.m` | 写出 Autocross 轻量 HTML 报告、精简 TXT 结论和报告产物。 |
+| `control_EVO/optimization/write_dyc_figure8_comparison_report.m` | 写出八字绕环轻量 HTML 报告、分段指标和报告产物。 |
+| `control_EVO/optimization/plot_dyc_autocross_presentation_figures.m` | 从导出数据重绘 Autocross 展示版图表。 |
+| `control_EVO/optimization/plot_dyc_figure8_presentation_figures.m` | 从导出数据重绘八字绕环展示版图表。 |
 | `control_EVO/optimization/dyc_pid_optimization_config.m` | 优化器默认配置和可覆盖参数入口。 |
 | `control_EVO/optimization/optimize_dyc_pid_laptime.m` | 默认 station-stop 圈速优化入口。 |
 | `control_EVO/optimization/optimize_dyc_pid_autocross_laptime.m` | Autocross stop-time 圈速优化入口。 |
@@ -70,8 +80,19 @@
 | `control_EVO/optimization/append_dyc_optimization_checkpoint.m` | 将每次候选评价追加写入运行日志。 |
 | `control_EVO/optimization/write_dyc_pid_optimization_report.m` | 写出优化结果、summary、MAT 文件和最佳 PID 应用脚本。 |
 
-`control_EVO/optimization/tests/` 覆盖优化器配置、候选评价、指标提取、`.sim` 解析、preflight、输出文件和 smoke 流程：
+`control_EVO/optimization/tests/` 覆盖自动报告、展示图、优化器配置、候选评价、指标提取、`.sim` 解析、preflight、输出文件和 smoke 流程：
 
+- `analyzeDycAutocrossReportResultsTest.m`
+- `analyzeDycFigure8ReportResultsTest.m`
+- `compareDycAutocrossEffectivenessSmokeTest.m`
+- `compareDycFigure8EffectivenessSmokeTest.m`
+- `computeDycAutocrossMetricsTest.m`
+- `computeDycFigure8MetricsTest.m`
+- `plotDycAutocrossPresentationFiguresTest.m`
+- `plotDycFigure8PresentationFiguresTest.m`
+- `runDycAutocrossReportSmokeTest.m`
+- `runDycFigure8ReportSmokeTest.m`
+- `writeDycAutocrossComparisonReportTest.m`
 - `dycOptimizationOutputTest.m`
 - `dycPidOptimizationConfigTest.m`
 - `evaluateDycPidCandidateTest.m`

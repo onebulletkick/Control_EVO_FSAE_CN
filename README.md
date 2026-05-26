@@ -240,30 +240,60 @@ results = runtests('control_EVO/tire_modeling/tests');
 table(results)
 ```
 
-### 可选：DYC PID 圈速优化
+### 可选：DYC 自动对比报告与 PID 圈速优化
 
-`control_EVO/optimization/` 提供外部 MATLAB 工具，用固定 CarSim Run 的停止时间作为目标调节 `PID_YawMomentController` 的 `Kp`、`Ki`、`Kd`。使用前先做 preflight：
+`control_EVO/optimization/` 提供两类外部 MATLAB 工具：
+
+- DYC 有无控制报告：运行 `dyc_off` 和 `dyc_on`，导出圈速、关键指标、展示图、CSV/MAT 数据包和 `report.html`。
+- PID 圈速优化：用固定 CarSim Run 的停止时间作为目标搜索 `PID_YawMomentController` 的 `Kp`、`Ki`、`Kd`。
+
+报告流程从 CarSim GUI 开始：选择目标 Run，确认 Import/Export 通道和 Simulink 模型路径，执行 `Send to Simulink`。之后在 MATLAB 中运行脚本。
+
+Autocross 自动报告入口：
 
 ```matlab
 repo = '<本地 Control_EVO 仓库路径>';
 addpath(fullfile(repo, 'control_EVO', 'optimization'));
+result = run_dyc_autocross_report();
+```
+
+八字绕环自动报告入口：
+
+```matlab
+repo = '<本地 Control_EVO 仓库路径>';
+addpath(fullfile(repo, 'control_EVO', 'optimization'));
+result = run_dyc_figure8_report();
+```
+
+已有结果后处理入口。该入口不重跑仿真，只重建“快在哪里”分析：
+
+```matlab
+analysis = analyze_dyc_autocross_report_results(resultsDir);
+analysis = analyze_dyc_figure8_report_results(resultsDir);
+```
+
+报告结果写入 `control_EVO/optimization/results/`。该目录是本地生成物目录，不提交。`report.html` 是 HTML 总览页；CSV、MAT 和 PNG 保留完整数据。
+
+PID 优化使用前先做 preflight：
+
+```matlab
 cfg = dyc_pid_optimization_config();
 report = run_dyc_pid_preflight(cfg)
 ```
 
-默认 station-stop 工况入口：
+默认 station-stop 优化入口：
 
 ```matlab
 result = optimize_dyc_pid_laptime();
 ```
 
-Autocross 停止事件工况入口：
+Autocross 停止事件优化入口：
 
 ```matlab
 result = optimize_dyc_pid_autocross_laptime();
 ```
 
-优化器通过 `SimulationInput` 在仿真候选中临时施加 PID 参数和 PID 模式，不为了调参保存 `DYC_1_9_test.slx`。详细说明见 [DYC PID 圈速优化工具说明](control_EVO/optimization/README.md)。
+优化器通过 `SimulationInput` 在仿真候选中临时施加 PID 参数和 PID 模式，不为了调参保存 `DYC_1_9_test.slx`。详细说明见 [DYC 自动报告与 PID 优化工具说明](control_EVO/optimization/README.md)。
 
 ## 验证边界
 
@@ -271,7 +301,7 @@ result = optimize_dyc_pid_autocross_laptime();
 - 已知本地工作流可以通过 MATLAB/Simulink 调用 CarSim S-Function 做有限时长闭环仿真，但每次复现仍依赖本机 CarSim 路径、许可证、模型数据库和 solver 链接状态。
 - `docs/control_evo_technical_design.md` 中的算法说明基于当前仓库文件、Simulink 静态读取结果和已确认项目状态整理，不新增额外仿真结论。
 - CarSim 求解器内部轮胎模型与 Simulink 控制侧轮胎查表是两条不同链路：前者用于整车动力学求解，后者用于控制分配限幅。
-- DYC PID 圈速优化只能说明固定 CarSim 工况和当前 `simfile.sim` 上的候选参数比较结果，不证明 DIL、实时硬件闭环或实车性能。
+- DYC 自动报告和 PID 圈速优化仅代表固定 CarSim 工况、当前 `simfile.sim` 和本机 solver/许可证环境下的离线仿真结果，不代表 DIL、实时硬件闭环或实车性能。
 - DIL 示例模型的基础检查可以包括导入 `DIL_example.zip`、确认 `DIL_26_5_1.slx` 能由 CarSim `Send to Simulink` 打开、检查当前 `simfile.sim` 或 CarSim Run 的 Import/Export 通道数与 Simulink 模型端口一致，并进行模型 update 或短时 smoke；这些检查不等于方向盘、踏板、力反馈、Live Video 或完整实时硬件闭环已经通过。
 - 项目后续仍需要完整 DIL 实时仿真、代码生成/嵌入式移植和实车验证，不能把离线联合仿真等同于最终上车结论。
 
@@ -281,7 +311,7 @@ result = optimize_dyc_pid_autocross_laptime();
 - [项目详细结构说明](docs/project_structure.md)
 - [DYC 设计流程说明](DYC_设计流程说明.md)
 - [轮胎控制查表说明](control_EVO/tire_modeling/README.md)
-- [DYC PID 圈速优化工具说明](control_EVO/optimization/README.md)
+- [DYC 自动报告与 PID 优化工具说明](control_EVO/optimization/README.md)
 - [Round9 Pacejka 工程包说明](control_EVO/round9_pacejka_engineering_package/README.md)
 - [飞书 Wiki 协作文档](https://rcnbxqkuldqh.feishu.cn/wiki/MN6YwSJR9i6QuKk2UcVcGXmSnid)
 

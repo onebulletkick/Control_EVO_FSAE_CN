@@ -155,15 +155,42 @@ flowchart LR
 
 这样做的意义，是保证后续“从仿真到上车”的技术链条是连续的，而不是仿真和实车完全脱节。
 
-### 3.1 PID 参数优化工具
+### 3.1 DYC 自动报告与 PID 参数优化工具
 
-在联合仿真能够稳定复现以后，可以用外部优化工具辅助调节 PID 参数。当前仓库的 `control_EVO/optimization/` 目录提供了 DYC PID 圈速优化入口，用固定 CarSim Run 的停止时间评价 `Kp`、`Ki`、`Kd` 候选参数。
+联合仿真稳定后，可用 `control_EVO/optimization/` 做两件事：生成 DYC 有无控制报告，辅助调节 PID 参数。
 
-这个工具的定位是“固定工况下的参数搜索”，不是新的控制架构。它通过 `Simulink.SimulationInput` 在单次候选仿真中临时设置 `PID_YawMomentController` 参数，并强制使用 PID 分支；优化过程不会为了调参保存 `DYC_1_9_test.slx`。
+自动报告用于固定工况对比，不改变控制器。先在 CarSim 中选择 Autocross 或八字绕环 Run，并执行 `Send to Simulink`；随后 MATLAB 入口运行 `dyc_off` 与 `dyc_on`，采集圈速、速度保持、路径误差、横摆力矩、轮胎利用率和驱动矩分配，生成 `report.html`、CSV、MAT 和展示图。
+
+Autocross 报告入口：
+
+```matlab
+repo = 'D:\Control_EVO';
+addpath(fullfile(repo, 'control_EVO', 'optimization'));
+result = run_dyc_autocross_report();
+```
+
+八字绕环报告入口：
+
+```matlab
+repo = 'D:\Control_EVO';
+addpath(fullfile(repo, 'control_EVO', 'optimization'));
+result = run_dyc_figure8_report();
+```
+
+已有结果目录可直接重建“快在哪里”分析，不重跑仿真：
+
+```matlab
+analysis = analyze_dyc_autocross_report_results(resultsDir);
+analysis = analyze_dyc_figure8_report_results(resultsDir);
+```
+
+`report.html` 是 HTML 总览页；完整数值数据保留在 CSV/MAT 中。
+
+PID 优化用于固定工况参数搜索。它通过 `Simulink.SimulationInput` 在单次候选仿真中临时设置 `PID_YawMomentController` 参数，并强制使用 PID 分支；优化过程不保存 `DYC_1_9_test.slx`。
 
 默认入口 `optimize_dyc_pid_laptime()` 使用 station-stop 日志作为圈速指标，Autocross 入口 `optimize_dyc_pid_autocross_laptime()` 使用 CarSim 停止事件或外部控制停止时间作为目标。两者都依赖当前 CarSim 数据库、Run、`simfile.sim`、solver 路径和许可证状态。
 
-需要特别注意的是，PID 优化结果只能说明当前固定 CarSim 工况下的候选参数表现。它不能证明 DIL 实时链路、方向盘/踏板/力反馈、Live Video 或实车性能已经通过。进入 DIL 之前仍然要重新核对输入通道、传感器顺序、实时节奏和 Live Video 链路。
+自动报告和 PID 优化结果仅代表当前固定 CarSim 工况下的离线仿真表现，不代表 DIL 实时链路、方向盘/踏板/力反馈、Live Video 或实车性能。进入 DIL 前仍需核对输入通道、传感器顺序、实时节奏和 Live Video 链路。
 
 ## 4. DIL 驾驶员在环仿真
 
@@ -514,7 +541,7 @@ flowchart TD
 ### 7.2 验证层面
 
 - 先做 MATLAB + Simulink + CarSim 联合仿真；
-- 在固定 CarSim 工况中可用 PID 圈速优化工具辅助调参；
+- 在固定 CarSim 工况中可用 DYC 自动报告工具复核有无控制差异，并用 PID 圈速优化工具辅助调参；
 - 再推进 DIL 驾驶员在环仿真；
 - 最终转向嵌入式和实车验证。
 
